@@ -129,7 +129,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 								<Show when={item.subagent || item.modelID}>
 									<text fg={theme().textMuted} wrapMode="none">
 										{item.subagent ?? "agent"}
-										<Show when={item.modelID}> [{item.modelID}]</Show>
+										<Show when={item.modelID}> {item.modelID}</Show>
 									</text>
 								</Show>
 							</box>
