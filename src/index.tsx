@@ -122,7 +122,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 							<box>
 								<box flexDirection="row" gap={1}>
 									<text fg={theme().success}>•</text>
-									<text fg={theme().text} wrapMode="none" flexGrow={1}>
+									<text fg={theme().warning} wrapMode="none" flexGrow={1}>
 										{displayTitle(item.title)}
 									</text>
 								</box>
