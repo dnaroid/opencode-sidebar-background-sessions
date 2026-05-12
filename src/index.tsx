@@ -10,7 +10,6 @@ type TaskItem = {
 	title: string;
 	subagent?: string;
 	modelID?: string;
-	status: string;
 };
 
 function displayTitle(title: string) {
@@ -52,6 +51,10 @@ function partModelID(part: Part) {
 	return part.state.metadata.model.modelID;
 }
 
+function taskMetaLine(item: TaskItem) {
+	return [item.subagent, item.modelID].filter(Boolean).join(" ");
+}
+
 function taskItem(
 	part: Part,
 	completedBackgroundTaskIDs: Set<string>,
@@ -76,7 +79,6 @@ function taskItem(
 			part.state.title ?? partInputString(part, "description") ?? sessionID,
 		subagent: partInputString(part, "subagent_type"),
 		modelID: partModelID(part),
-		status: part.state.status === "running" ? "launching" : "running",
 	};
 }
 
@@ -115,21 +117,19 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				</box>
 				<For each={list()}>
 					{(item) => {
+						const metaLine = taskMetaLine(item);
 						return (
 							<box>
-								<box flexDirection="row" gap={1} justifyContent="space-between">
+								<box flexDirection="row" gap={1}>
 									<text fg={theme().success}>•</text>
 									<text fg={theme().text} wrapMode="none" flexGrow={1}>
 										{displayTitle(item.title)}
 									</text>
-									<text fg={theme().textMuted} wrapMode="none">
-										{item.status}
-									</text>
 								</box>
-								<Show when={item.subagent || item.modelID}>
+								<Show when={metaLine}>
 									<text fg={theme().textMuted} wrapMode="none">
-										{item.subagent ?? "agent"}
-										<Show when={item.modelID}> {item.modelID}</Show>
+										{"  "}
+										{metaLine}
 									</text>
 								</Show>
 							</box>
