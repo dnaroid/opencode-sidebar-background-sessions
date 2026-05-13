@@ -4,22 +4,7 @@ OpenCode TUI plugin that shows running background sub-agents in the session side
 
 It adds a `Running Agents` section above the normal sidebar content and lists background task agents until their matching `background_output` is collected.
 
-## Install from npm
-
-```bash
-bun add -g opencode-sidebar-background-sessions
-```
-
-Then add the package to your OpenCode TUI config:
-
-```jsonc
-// ~/.config/opencode/tui.json
-{
-  "plugin": ["opencode-sidebar-background-sessions"],
-}
-```
-
-If `tui.json` already has plugins, append the package name to the existing `plugin` array.
+![demo](demo.png)
 
 ## Local development install
 
