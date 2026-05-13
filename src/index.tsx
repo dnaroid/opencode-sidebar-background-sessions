@@ -130,8 +130,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 						return (
 							<box flexDirection="row" gap={1}>
 								<text fg={theme().success}>•</text>
-								<box flexGrow={1}>
-									<text fg={theme().warning} wrapMode="none">
+								<box flexGrow={1} flexShrink={1}>
+									<text fg={theme().warning} wrapMode="word">
 										{displayTitle(item.title)}
 									</text>
 									<Show when={metaLine}>
