@@ -119,19 +119,18 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 					{(item) => {
 						const metaLine = taskMetaLine(item);
 						return (
-							<box>
-								<box flexDirection="row" gap={1}>
-									<text fg={theme().success}>•</text>
-									<text fg={theme().warning} wrapMode="none" flexGrow={1}>
+							<box flexDirection="row" gap={1}>
+								<text fg={theme().success}>•</text>
+								<box flexGrow={1}>
+									<text fg={theme().warning} wrapMode="none">
 										{displayTitle(item.title)}
 									</text>
+									<Show when={metaLine}>
+										<text fg={theme().textMuted} wrapMode="none">
+											{metaLine}
+										</text>
+									</Show>
 								</box>
-								<Show when={metaLine}>
-									<text fg={theme().textMuted} wrapMode="none">
-										{"  "}
-										{metaLine}
-									</text>
-								</Show>
 							</box>
 						);
 					}}
