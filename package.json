@@ -5,24 +5,29 @@
 	"description": "OpenCode TUI sidebar plugin that shows running background sub-agents.",
 	"type": "module",
 	"license": "MIT",
-	"author": "",
+	"author": "dnaroid",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/your-name/opencode-sidebar-background-sessions.git"
+		"url": "git+https://github.com/dnaroid/opencode-sidebar-background-sessions.git"
 	},
 	"bugs": {
-		"url": "https://github.com/your-name/opencode-sidebar-background-sessions/issues"
+		"url": "https://github.com/dnaroid/opencode-sidebar-background-sessions/issues"
 	},
-	"homepage": "https://github.com/your-name/opencode-sidebar-background-sessions#readme",
+	"homepage": "https://github.com/dnaroid/opencode-sidebar-background-sessions#readme",
 	"keywords": [
 		"opencode",
 		"opencode-plugin",
 		"tui",
 		"sidebar",
-		"agents"
+		"agents",
+		"tui-plugin"
 	],
 	"exports": {
 		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./tui": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		}

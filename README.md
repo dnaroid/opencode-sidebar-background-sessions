@@ -6,6 +6,43 @@ It adds a `Running Agents` section above the normal sidebar content and lists ba
 
 ![demo](demo.png)
 
+## Install
+
+This is an OpenCode TUI plugin. It belongs in `tui.json`, not `opencode.json`.
+
+Use OpenCode's plugin installer:
+
+```bash
+opencode plugin -g opencode-sidebar-background-sessions
+```
+
+If you install manually, add the package to `~/.config/opencode/tui.json`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": ["opencode-sidebar-background-sessions"]
+}
+```
+
+Restart OpenCode after installing. When background task agents are running, the sidebar shows a `Running Agents` section above the normal sidebar content.
+
+## LLM installation task
+
+Give this to an LLM/agent when you want it to install the plugin for you:
+
+```text
+Install the npm package `opencode-sidebar-background-sessions` as an OpenCode TUI plugin.
+
+Important: this is a TUI plugin, not a server plugin. Configure it in `~/.config/opencode/tui.json`, not `opencode.json`.
+
+Steps:
+1. Run `opencode plugin -g opencode-sidebar-background-sessions` if the OpenCode CLI supports plugin installation.
+2. Verify `~/.config/opencode/tui.json` contains `"plugin": ["opencode-sidebar-background-sessions"]` or add the package name to the existing `plugin` array without removing other plugins.
+3. Do not add it to `~/.config/opencode/opencode.json`.
+4. Restart OpenCode and confirm the sidebar shows `Running Agents` when background task agents are active.
+```
+
 ## Local development install
 
 From this package directory:
@@ -34,7 +71,7 @@ Then point OpenCode at the built module:
 
 ## Publish
 
-Before publishing, replace the placeholder GitHub URLs in `package.json`, then run:
+Run:
 
 ```bash
 bun install
