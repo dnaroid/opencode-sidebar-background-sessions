@@ -58,11 +58,13 @@ function taskMetaLine(item: TaskItem) {
 function taskItem(
 	part: Part,
 	completedBackgroundTaskIDs: Set<string>,
+	isSessionIdle: (sessionID: string) => boolean,
 ): TaskItem | undefined {
 	if (part.type !== "tool") return;
 	if (part.tool !== "task") return;
 	const sessionID = partMetadataString(part, "sessionId");
 	if (!sessionID) return;
+	if (isSessionIdle(sessionID)) return;
 
 	if (part.state.status === "completed") {
 		const backgroundTaskID = partMetadataString(part, "backgroundTaskId");
@@ -102,7 +104,14 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				.filter((backgroundTaskID) => backgroundTaskID !== undefined),
 		);
 		return parts()
-			.map((part) => taskItem(part, completedBackgroundTaskIDs))
+			.map((part) =>
+				taskItem(
+					part,
+					completedBackgroundTaskIDs,
+					(sessionID) =>
+						props.api.state.session.status(sessionID)?.type === "idle",
+				),
+			)
 			.filter((item): item is TaskItem => item !== undefined)
 			.reverse();
 	});

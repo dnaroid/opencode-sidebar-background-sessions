@@ -2,7 +2,7 @@
 
 OpenCode TUI plugin that shows running background sub-agents in the session sidebar.
 
-It adds a `Running Agents` section above the normal sidebar content and lists background task agents until their matching `background_output` is collected.
+It adds a `Running Agents` section above the normal sidebar content and lists background task agents while their sub-agent session is still busy. As a fallback, completed task entries are also removed once their matching `background_output` is collected.
 
 ![demo](demo.png)
 
