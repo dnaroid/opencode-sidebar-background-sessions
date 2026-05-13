@@ -6,17 +6,32 @@ It adds a `Running Agents` section above the normal sidebar content and lists ba
 
 ![demo](demo.png)
 
-## Install
+## Installation
+
+### For Humans
+
+Copy and paste this prompt to your LLM agent (OpenCode, Claude Code, AmpCode, Cursor, etc.):
+
+```text
+Install and configure the OpenCode TUI plugin `opencode-sidebar-background-sessions` by following the instructions here:
+https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/main/docs/guide/installation.md
+```
+
+Or read the [Installation Guide](docs/guide/installation.md), but letting an agent edit the config is safer.
+
+### For LLM Agents
+
+Fetch the installation guide and follow it:
+
+```bash
+curl -s https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/main/docs/guide/installation.md
+```
+
+### Manual install
 
 This is an OpenCode TUI plugin. It belongs in `tui.json`, not `opencode.json`.
 
-Use OpenCode's plugin installer:
-
-```bash
-opencode plugin -g opencode-sidebar-background-sessions
-```
-
-If you install manually, add the package to `~/.config/opencode/tui.json`:
+Add the npm package name to `~/.config/opencode/tui.json`:
 
 ```jsonc
 {
@@ -27,21 +42,7 @@ If you install manually, add the package to `~/.config/opencode/tui.json`:
 
 Restart OpenCode after installing. When background task agents are running, the sidebar shows a `Running Agents` section above the normal sidebar content.
 
-## LLM installation task
-
-Give this to an LLM/agent when you want it to install the plugin for you:
-
-```text
-Install the npm package `opencode-sidebar-background-sessions` as an OpenCode TUI plugin.
-
-Important: this is a TUI plugin, not a server plugin. Configure it in `~/.config/opencode/tui.json`, not `opencode.json`.
-
-Steps:
-1. Run `opencode plugin -g opencode-sidebar-background-sessions` if the OpenCode CLI supports plugin installation.
-2. Verify `~/.config/opencode/tui.json` contains `"plugin": ["opencode-sidebar-background-sessions"]` or add the package name to the existing `plugin` array without removing other plugins.
-3. Do not add it to `~/.config/opencode/opencode.json`.
-4. Restart OpenCode and confirm the sidebar shows `Running Agents` when background task agents are active.
-```
+Do not use `opencode plugin -g` for this package if your OpenCode version writes plugin entries to `opencode.json`; that command is for server plugins, while this package is loaded by the TUI plugin runtime.
 
 ## Local development install
 
