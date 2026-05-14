@@ -5,6 +5,7 @@ import { BoxRenderable, TextAttributes, TextRenderable } from "@opentui/core";
 import { onCleanup } from "solid-js";
 
 const id = "opencode-sidebar-background-sessions";
+const recentSessionsPageSize = 20;
 
 type TaskItem = {
 	sessionID?: string;
@@ -38,11 +39,6 @@ function partInputString(part: Part, key: string) {
 
 function taskMetaLine(item: TaskItem) {
 	return item.subagent ?? "";
-}
-
-function sessionMetaLine(session: RecentSessionItem, currentSessionID: string) {
-	if (session.id === currentSessionID) return "current";
-	return session.agent ?? "";
 }
 
 function taskItem(
@@ -85,10 +81,13 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	const theme = () => props.api.theme.current;
 	let container: BoxRenderable | undefined;
 	let recentSessionsCollapsed = true;
+	let recentSessionsPage = 0;
+	let recentSessionsHasNext = false;
 	let recentSessionsLoading = false;
 	let recentSessionsError = "";
 	let recentSessions: RecentSessionItem[] = [];
 	let recentSessionsRequest = 0;
+	let renderScheduled = false;
 
 	const parts = () =>
 		props.api.state.session
@@ -141,8 +140,9 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		renderSidebar();
 
 		const response = await props.api.client.session.list({
-			limit: 20,
+			limit: recentSessionsPageSize + 1,
 			scope: "project",
+			start: recentSessionsPage * recentSessionsPageSize,
 		});
 		if (request !== recentSessionsRequest) return;
 
@@ -153,11 +153,20 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			return;
 		}
 
-		recentSessions = (response.data ?? []).slice(0, 20);
+		const sessions = response.data ?? [];
+		recentSessions = sessions.slice(0, recentSessionsPageSize);
+		recentSessionsHasNext = sessions.length > recentSessionsPageSize;
 		renderSidebar();
+	};
+	const goToRecentSessionsPage = (page: number) => {
+		recentSessionsPage = page;
+		queueMicrotask(() => {
+			void refreshRecentSessions();
+		});
 	};
 	const renderSidebar = () => {
 		if (!container) return;
+		renderScheduled = false;
 		clearContainer();
 
 		const items = list();
@@ -229,55 +238,71 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			gap: 1,
 			onMouseDown: () => {
 				recentSessionsCollapsed = !recentSessionsCollapsed;
-				renderSidebar();
+				scheduleRenderSidebar();
 			},
 		});
 		recentHeader.add(
 			new TextRenderable(ctx, {
-				content: recentSessionsCollapsed ? "▸" : "▾",
-				fg: currentTheme.textMuted,
+				content: recentSessionsCollapsed ? "▶" : "▼",
+				fg: currentTheme.text,
 			}),
 		);
 		recentHeader.add(
 			new TextRenderable(ctx, {
-				content: "Recent Sessions",
+				content: "Sessions",
 				fg: currentTheme.text,
 				attributes: TextAttributes.BOLD,
-			}),
-		);
-		recentHeader.add(
-			new TextRenderable(ctx, {
-				content: recentSessionsLoading
-					? "loading"
-					: `${recentSessions.length}/20`,
-				fg: currentTheme.textMuted,
 			}),
 		);
 		container.add(recentHeader);
 
 		if (!recentSessionsCollapsed) {
 			if (recentSessionsError) {
-				container.add(
+				const row = new BoxRenderable(ctx, {
+					flexDirection: "row",
+					gap: 1,
+				});
+				row.add(
+					new TextRenderable(ctx, { content: "•", fg: currentTheme.error }),
+				);
+				row.add(
 					new TextRenderable(ctx, {
 						content: recentSessionsError,
 						fg: currentTheme.error,
 						wrapMode: "word",
 					}),
 				);
+				container.add(row);
 			} else if (recentSessionsLoading && recentSessions.length === 0) {
-				container.add(
+				const row = new BoxRenderable(ctx, {
+					flexDirection: "row",
+					gap: 1,
+				});
+				row.add(
+					new TextRenderable(ctx, { content: "•", fg: currentTheme.success }),
+				);
+				row.add(
 					new TextRenderable(ctx, {
-						content: "Loading sessions...",
+						content: "loading sessions...",
 						fg: currentTheme.textMuted,
 					}),
 				);
+				container.add(row);
 			} else if (recentSessions.length === 0) {
-				container.add(
+				const row = new BoxRenderable(ctx, {
+					flexDirection: "row",
+					gap: 1,
+				});
+				row.add(
+					new TextRenderable(ctx, { content: "•", fg: currentTheme.textMuted }),
+				);
+				row.add(
 					new TextRenderable(ctx, {
-						content: "No recent sessions",
+						content: "no recent sessions",
 						fg: currentTheme.textMuted,
 					}),
 				);
+				container.add(row);
 			} else {
 				for (const session of recentSessions) {
 					const current = session.id === props.session_id;
@@ -289,28 +314,79 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 					});
 					row.add(
 						new TextRenderable(ctx, {
-							content: current ? "•" : "›",
-							fg: current ? currentTheme.success : currentTheme.textMuted,
+							content: "•",
+							fg: current ? currentTheme.text : currentTheme.success,
 						}),
 					);
 
-					const metaLine = sessionMetaLine(session, props.session_id);
 					row.add(
 						new TextRenderable(ctx, {
-							content: metaLine
-								? `${displayTitle(session.title)} ${metaLine}`
-								: displayTitle(session.title),
-							fg: current ? currentTheme.textMuted : currentTheme.warning,
+							content: displayTitle(session.title),
+							fg: current ? currentTheme.text : currentTheme.textMuted,
+							attributes: current ? TextAttributes.BOLD : undefined,
 							wrapMode: "word",
 						}),
 					);
 					container.add(row);
 				}
 			}
+
+			if (recentSessionsPage > 0 || recentSessionsHasNext) {
+				const pagination = new BoxRenderable(ctx, {
+					flexDirection: "row",
+					gap: 1,
+				});
+
+				const previous = new BoxRenderable(ctx, {
+					onMouseDown:
+						recentSessionsPage > 0
+							? () => goToRecentSessionsPage(recentSessionsPage - 1)
+							: undefined,
+				});
+				previous.add(
+					new TextRenderable(ctx, {
+						content: "‹ Prev",
+						fg:
+							recentSessionsPage > 0
+								? currentTheme.text
+								: currentTheme.textMuted,
+					}),
+				);
+				pagination.add(previous);
+
+				pagination.add(
+					new TextRenderable(ctx, {
+						content: `Page ${recentSessionsPage + 1}`,
+						fg: currentTheme.textMuted,
+					}),
+				);
+
+				const next = new BoxRenderable(ctx, {
+					onMouseDown: recentSessionsHasNext
+						? () => goToRecentSessionsPage(recentSessionsPage + 1)
+						: undefined,
+				});
+				next.add(
+					new TextRenderable(ctx, {
+						content: "Next ›",
+						fg: recentSessionsHasNext
+							? currentTheme.text
+							: currentTheme.textMuted,
+					}),
+				);
+				pagination.add(next);
+
+				container.add(pagination);
+			}
 		}
 
 		container.requestRender();
 		props.api.renderer.requestRender();
+	};
+	const scheduleRenderSidebar = () => {
+		if (renderScheduled) return;
+		renderScheduled = true;
+		queueMicrotask(renderSidebar);
 	};
 	const refreshSidebar = () => renderSidebar();
 	const refreshSessions = () => {
