@@ -6,6 +6,12 @@ await Bun.build({
 	outdir: "dist",
 	target: "bun",
 	format: "esm",
-	external: ["@opencode-ai/plugin", "@opencode-ai/sdk", "solid-js"],
+	external: [
+		"@opencode-ai/plugin",
+		"@opencode-ai/sdk",
+		"solid-js",
+		"@opentui/solid",
+		"@opentui/core",
+	],
 	plugins: [solidTransformPlugin],
 });

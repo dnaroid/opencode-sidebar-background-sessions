@@ -10,7 +10,9 @@ Configure OpenCode so the TUI sidebar shows a `Running Agents` section while bac
 
 This package is a TUI plugin, not a server plugin.
 
-- Use `~/.config/opencode/tui.json`.
+- Use your TUI config file:
+  - **macOS / Linux**: `~/.config/opencode/tui.json`
+  - **Windows**: `%APPDATA%\opencode\tui.json`
 - Do not add this package to `~/.config/opencode/opencode.json`.
 - Do not use `opencode plugin -g opencode-sidebar-background-sessions` if that command writes to `opencode.json` in the installed OpenCode version.
 
@@ -22,7 +24,9 @@ This package is a TUI plugin, not a server plugin.
    opencode --version
    ```
 
-2. Open or create `~/.config/opencode/tui.json`.
+2. Open or create your TUI config file:
+   - **macOS / Linux**: `~/.config/opencode/tui.json`
+   - **Windows**: `%APPDATA%\opencode\tui.json`
 
 3. Ensure the file has the TUI schema and a `plugin` array containing `opencode-sidebar-background-sessions`.
 
@@ -31,7 +35,7 @@ This package is a TUI plugin, not a server plugin.
    ```jsonc
    {
      "$schema": "https://opencode.ai/tui.json",
-     "plugin": ["opencode-sidebar-background-sessions"]
+     "plugin": ["opencode-sidebar-background-sessions"],
    }
    ```
 
@@ -52,14 +56,12 @@ bun install
 bun run build
 ```
 
-Then add the built file path to `~/.config/opencode/tui.json`:
+Then add the package root to your TUI config (opencode resolves the `./tui` export from `package.json`):
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": [
-    "/absolute/path/to/opencode-sidebar-background-sessions/dist/index.js"
-  ]
+  "plugin": ["/absolute/path/to/opencode-sidebar-background-sessions"],
 }
 ```
 

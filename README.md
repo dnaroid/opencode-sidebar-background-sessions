@@ -31,12 +31,15 @@ curl -s https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-se
 
 This is an OpenCode TUI plugin. It belongs in `tui.json`, not `opencode.json`.
 
-Add the npm package name to `~/.config/opencode/tui.json`:
+Add the npm package name to your TUI config:
+
+- **macOS / Linux**: `~/.config/opencode/tui.json`
+- **Windows**: `%APPDATA%\opencode\tui.json`
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-sidebar-background-sessions"]
+  "plugin": ["opencode-sidebar-background-sessions"],
 }
 ```
 
@@ -53,14 +56,13 @@ bun install
 bun run build
 ```
 
-Then point OpenCode at the built module:
+Then point OpenCode at the package root — it will resolve the `./tui` export from `package.json` automatically:
 
 ```jsonc
-// ~/.config/opencode/tui.json
+// ~/.config/opencode/tui.json  (macOS/Linux)
+// %APPDATA%\opencode\tui.json  (Windows)
 {
-  "plugin": [
-    "/absolute/path/to/opencode-sidebar-background-sessions/dist/index.js",
-  ],
+  "plugin": ["/absolute/path/to/opencode-sidebar-background-sessions"],
 }
 ```
 
@@ -69,14 +71,3 @@ Then point OpenCode at the built module:
 - This is a TUI plugin, so it is configured in `tui.json`, not `opencode.json`.
 - The normal OpenCode Status dialog lists server plugins; TUI plugins may not appear there.
 - The plugin intentionally does not mutate session titles. It reads the current TUI session state and renders only in the sidebar.
-
-## Publish
-
-Run:
-
-```bash
-bun install
-bun run typecheck
-bun run build
-npm publish --access public
-```
