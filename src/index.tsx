@@ -88,10 +88,22 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	let recentSessions: RecentSessionItem[] = [];
 	let recentSessionsRequest = 0;
 	let renderScheduled = false;
+	let activeSessionID = props.session_id;
+
+	const currentSessionID = () => {
+		const currentRoute = props.api.route.current;
+		if (
+			currentRoute.name === "session" &&
+			typeof currentRoute.params?.sessionID === "string"
+		) {
+			activeSessionID = currentRoute.params.sessionID;
+		}
+		return activeSessionID;
+	};
 
 	const parts = () =>
 		props.api.state.session
-			.messages(props.session_id)
+			.messages(currentSessionID())
 			.flatMap((message) => props.api.state.part(message.id));
 	const list = () => {
 		const currentParts = parts();
@@ -127,11 +139,15 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	};
 	const openSubagentSession = (item: TaskItem) => {
 		if (!item.sessionID) return;
+		activeSessionID = item.sessionID;
 		props.api.route.navigate("session", { sessionID: item.sessionID });
+		scheduleRenderSidebar();
 	};
 	const openRecentSession = (session: RecentSessionItem) => {
-		if (session.id === props.session_id) return;
+		if (session.id === currentSessionID()) return;
+		activeSessionID = session.id;
 		props.api.route.navigate("session", { sessionID: session.id });
+		scheduleRenderSidebar();
 	};
 	const refreshRecentSessions = async () => {
 		const request = ++recentSessionsRequest;
@@ -160,9 +176,14 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	};
 	const goToRecentSessionsPage = (page: number) => {
 		recentSessionsPage = page;
-		queueMicrotask(() => {
+		recentSessions = [];
+		recentSessionsHasNext = false;
+		recentSessionsLoading = true;
+		recentSessionsError = "";
+		scheduleRenderSidebar();
+		setTimeout(() => {
 			void refreshRecentSessions();
-		});
+		}, 0);
 	};
 	const renderSidebar = () => {
 		if (!container) return;
@@ -305,7 +326,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				container.add(row);
 			} else {
 				for (const session of recentSessions) {
-					const current = session.id === props.session_id;
+					const current = session.id === currentSessionID();
 					const row = new BoxRenderable(ctx, {
 						id: `${id}-recent-row-${session.id}`,
 						flexDirection: "row",
@@ -386,7 +407,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	const scheduleRenderSidebar = () => {
 		if (renderScheduled) return;
 		renderScheduled = true;
-		queueMicrotask(renderSidebar);
+		setTimeout(renderSidebar, 0);
 	};
 	const refreshSidebar = () => renderSidebar();
 	const refreshSessions = () => {
