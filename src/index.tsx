@@ -47,16 +47,16 @@ function partInputString(part: Part, key: string) {
 
 function modelLabel(model: Session["model"] | undefined) {
 	if (!model) return;
-	const provider = model.providerID ? `${model.providerID}/` : "";
+	const name = model.id.split("/").at(-1) ?? model.id;
 	const variant = model.variant ? `:${model.variant}` : "";
-	return `${provider}${model.id}${variant}`;
+	return `${name}${variant}`;
 }
 
 function taskMetaLine(item: TaskItem) {
 	const details = [item.agent ?? item.subagent, modelLabel(item.model)].filter(
 		(value) => value !== undefined && value !== "",
 	);
-	return details.join(" · ");
+	return details.join(" ");
 }
 
 function isSubagentSession(session: RecentSessionItem) {

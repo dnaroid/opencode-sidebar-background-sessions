@@ -42,6 +42,8 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && bun ./scripts/build.ts && tsc --emitDeclarationOnly",
+		"test": "bun run build && bun test test",
+		"test:coverage": "bun run build && bun test --coverage test",
 		"typecheck": "tsc --noEmit",
 		"prepack": "bun run build"
 	},
