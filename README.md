@@ -7,18 +7,15 @@ It adds two sidebar sections:
 - `Running Agents` — shows currently active background sub-agent sessions and lets you jump into them.
 - `Sessions` — a collapsible project-session accordion with paginated navigation between recent sessions.
 
-![demo](demo.png)
+![OpenCode sidebar demo](sidebar-demo.png)
 
 ## Features
 
-- Shows active background task agents in the sidebar while their child session is still running.
-- Hides completed/idle retro task records so old sessions do not appear to have stuck agents.
-- Enriches running-agent rows with child session agent/model metadata when OpenCode exposes it.
-- Shortens model labels to the final model segment, for example `openrouter/anthropic/claude-sonnet-4-5` becomes `claude-sonnet-4-5`.
-- Adds a `Sessions` accordion that is collapsed by default.
-- Lists project sessions only (`scope: "project"`) and filters out sub-agent sessions from the session navigator.
-- Shows 15 sessions per page with right-aligned header controls like `← 01/11 →`.
-- Highlights the current session and navigates on click to any other visible session.
+- Tracks active background agents.
+- Adds a project-only `Sessions` accordion.
+- Supports click-to-open agent and session rows.
+- Includes compact header pagination, for example `← 01/11 →`.
+- Hides stale completed-agent records and sub-agent sessions from the navigator.
 
 ## Sidebar behavior
 
