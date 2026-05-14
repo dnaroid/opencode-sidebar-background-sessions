@@ -183,7 +183,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	const recentSessionsPageLabel = () => {
 		const total = allRecentSessions.length;
 		if (total === 0) return "0/0";
-		return `${recentSessionsPage + 1}/${recentSessionsPageCount()}`;
+		const pageCount = recentSessionsPageCount();
+		return `${String(recentSessionsPage + 1).padStart(String(pageCount).length, "0")}/${pageCount}`;
 	};
 	const refreshRecentSessions = async () => {
 		const request = ++recentSessionsRequest;
@@ -304,6 +305,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			id: `${id}-recent-sessions-header`,
 			flexDirection: "row",
 			gap: 1,
+			width: "100%",
 			onMouseDown: () => {
 				recentSessionsCollapsed = !recentSessionsCollapsed;
 				scheduleRenderSidebar();
@@ -322,6 +324,58 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				attributes: TextAttributes.BOLD,
 			}),
 		);
+		if (
+			!recentSessionsCollapsed &&
+			!recentSessionsError &&
+			!recentSessionsLoading &&
+			allRecentSessions.length > 0
+		) {
+			const previousEnabled = recentSessionsPage > 0;
+			const nextEnabled = recentSessionsHasNext;
+			const label = recentSessionsPageLabel();
+			recentHeader.add(
+				new BoxRenderable(ctx, {
+					flexGrow: 1,
+					flexShrink: 1,
+				}),
+			);
+			const controls = new BoxRenderable(ctx, {
+				id: `${id}-recent-pagination`,
+				flexDirection: "row",
+				onMouseDown: function (event) {
+					event.stopPropagation();
+					const localX = event.x - this.x;
+					if (previousEnabled && localX < 2) {
+						goToRecentSessionsPage(recentSessionsPage - 1);
+						return;
+					}
+					if (nextEnabled && localX >= label.length + 3) {
+						goToRecentSessionsPage(recentSessionsPage + 1);
+					}
+				},
+			});
+			controls.add(
+				new TextRenderable(ctx, {
+					content: "←",
+					fg: previousEnabled ? currentTheme.text : currentTheme.textMuted,
+					width: 2,
+				}),
+			);
+			controls.add(
+				new TextRenderable(ctx, {
+					content: label,
+					fg: currentTheme.textMuted,
+				}),
+			);
+			controls.add(
+				new TextRenderable(ctx, {
+					content: "→",
+					fg: nextEnabled ? currentTheme.text : currentTheme.textMuted,
+					marginLeft: 1,
+				}),
+			);
+			recentHeader.add(controls);
+		}
 		container.add(recentHeader);
 
 		if (!recentSessionsCollapsed) {
@@ -406,51 +460,6 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 					);
 					container.add(row);
 				}
-			}
-
-			if (
-				!recentSessionsError &&
-				!recentSessionsLoading &&
-				allRecentSessions.length > 0
-			) {
-				const previousEnabled = recentSessionsPage > 0;
-				const nextEnabled = recentSessionsHasNext;
-				const label = recentSessionsPageLabel();
-				const controls = new BoxRenderable(ctx, {
-					id: `${id}-recent-pagination`,
-					flexDirection: "row",
-					onMouseDown: function (event) {
-						const localX = event.x - this.x;
-						if (previousEnabled && localX < 2) {
-							goToRecentSessionsPage(recentSessionsPage - 1);
-							return;
-						}
-						if (nextEnabled && localX >= label.length + 3) {
-							goToRecentSessionsPage(recentSessionsPage + 1);
-						}
-					},
-				});
-				controls.add(
-					new TextRenderable(ctx, {
-						content: "←",
-						fg: previousEnabled ? currentTheme.text : currentTheme.textMuted,
-						width: 2,
-					}),
-				);
-				controls.add(
-					new TextRenderable(ctx, {
-						content: label,
-						fg: currentTheme.textMuted,
-					}),
-				);
-				controls.add(
-					new TextRenderable(ctx, {
-						content: "→",
-						fg: nextEnabled ? currentTheme.text : currentTheme.textMuted,
-						marginLeft: 1,
-					}),
-				);
-				container.add(controls);
 			}
 		}
 
