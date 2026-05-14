@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui";
-import type { Part } from "@opencode-ai/sdk/v2";
+import type { Part, Session } from "@opencode-ai/sdk/v2";
 import { BoxRenderable, TextAttributes, TextRenderable } from "@opentui/core";
 import { onCleanup } from "solid-js";
 
@@ -11,6 +11,8 @@ type TaskItem = {
 	title: string;
 	subagent?: string;
 };
+
+type RecentSessionItem = Pick<Session, "id" | "title" | "agent" | "time">;
 
 function displayTitle(title: string) {
 	return title
@@ -36,6 +38,11 @@ function partInputString(part: Part, key: string) {
 
 function taskMetaLine(item: TaskItem) {
 	return item.subagent ?? "";
+}
+
+function sessionMetaLine(session: RecentSessionItem, currentSessionID: string) {
+	if (session.id === currentSessionID) return "current";
+	return session.agent ?? "";
 }
 
 function taskItem(
@@ -77,6 +84,11 @@ function taskItem(
 function View(props: { api: TuiPluginApi; session_id: string }) {
 	const theme = () => props.api.theme.current;
 	let container: BoxRenderable | undefined;
+	let recentSessionsCollapsed = true;
+	let recentSessionsLoading = false;
+	let recentSessionsError = "";
+	let recentSessions: RecentSessionItem[] = [];
+	let recentSessionsRequest = 0;
 
 	const parts = () =>
 		props.api.state.session
@@ -118,31 +130,54 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		if (!item.sessionID) return;
 		props.api.route.navigate("session", { sessionID: item.sessionID });
 	};
+	const openRecentSession = (session: RecentSessionItem) => {
+		if (session.id === props.session_id) return;
+		props.api.route.navigate("session", { sessionID: session.id });
+	};
+	const refreshRecentSessions = async () => {
+		const request = ++recentSessionsRequest;
+		recentSessionsLoading = true;
+		recentSessionsError = "";
+		renderSidebar();
+
+		const response = await props.api.client.session.list({
+			limit: 20,
+			scope: "project",
+		});
+		if (request !== recentSessionsRequest) return;
+
+		recentSessionsLoading = false;
+		if (response.error) {
+			recentSessionsError = "Unable to load sessions";
+			renderSidebar();
+			return;
+		}
+
+		recentSessions = (response.data ?? []).slice(0, 20);
+		renderSidebar();
+	};
 	const renderSidebar = () => {
 		if (!container) return;
 		clearContainer();
 
 		const items = list();
-		if (items.length === 0) {
-			container.requestRender();
-			props.api.renderer.requestRender();
-			return;
-		}
-
 		const ctx = container.ctx;
 		const currentTheme = theme();
-		const header = new BoxRenderable(ctx, {
-			flexDirection: "row",
-			gap: 1,
-		});
-		header.add(
-			new TextRenderable(ctx, {
-				content: "Running Agents",
-				fg: currentTheme.text,
-				attributes: TextAttributes.BOLD,
-			}),
-		);
-		container.add(header);
+
+		if (items.length > 0) {
+			const header = new BoxRenderable(ctx, {
+				flexDirection: "row",
+				gap: 1,
+			});
+			header.add(
+				new TextRenderable(ctx, {
+					content: "Running Agents",
+					fg: currentTheme.text,
+					attributes: TextAttributes.BOLD,
+				}),
+			);
+			container.add(header);
+		}
 
 		for (const item of items) {
 			const row = new BoxRenderable(ctx, {
@@ -161,6 +196,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			);
 
 			const textColumn = new BoxRenderable(ctx, {
+				flexDirection: "column",
 				flexGrow: 1,
 				flexShrink: 1,
 			});
@@ -187,24 +223,114 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			container.add(row);
 		}
 
+		const recentHeader = new BoxRenderable(ctx, {
+			id: `${id}-recent-sessions-header`,
+			flexDirection: "row",
+			gap: 1,
+			onMouseDown: () => {
+				recentSessionsCollapsed = !recentSessionsCollapsed;
+				renderSidebar();
+			},
+		});
+		recentHeader.add(
+			new TextRenderable(ctx, {
+				content: recentSessionsCollapsed ? "▸" : "▾",
+				fg: currentTheme.textMuted,
+			}),
+		);
+		recentHeader.add(
+			new TextRenderable(ctx, {
+				content: "Recent Sessions",
+				fg: currentTheme.text,
+				attributes: TextAttributes.BOLD,
+			}),
+		);
+		recentHeader.add(
+			new TextRenderable(ctx, {
+				content: recentSessionsLoading
+					? "loading"
+					: `${recentSessions.length}/20`,
+				fg: currentTheme.textMuted,
+			}),
+		);
+		container.add(recentHeader);
+
+		if (!recentSessionsCollapsed) {
+			if (recentSessionsError) {
+				container.add(
+					new TextRenderable(ctx, {
+						content: recentSessionsError,
+						fg: currentTheme.error,
+						wrapMode: "word",
+					}),
+				);
+			} else if (recentSessionsLoading && recentSessions.length === 0) {
+				container.add(
+					new TextRenderable(ctx, {
+						content: "Loading sessions...",
+						fg: currentTheme.textMuted,
+					}),
+				);
+			} else if (recentSessions.length === 0) {
+				container.add(
+					new TextRenderable(ctx, {
+						content: "No recent sessions",
+						fg: currentTheme.textMuted,
+					}),
+				);
+			} else {
+				for (const session of recentSessions) {
+					const current = session.id === props.session_id;
+					const row = new BoxRenderable(ctx, {
+						id: `${id}-recent-row-${session.id}`,
+						flexDirection: "row",
+						gap: 1,
+						onMouseDown: current ? undefined : () => openRecentSession(session),
+					});
+					row.add(
+						new TextRenderable(ctx, {
+							content: current ? "•" : "›",
+							fg: current ? currentTheme.success : currentTheme.textMuted,
+						}),
+					);
+
+					const metaLine = sessionMetaLine(session, props.session_id);
+					row.add(
+						new TextRenderable(ctx, {
+							content: metaLine
+								? `${displayTitle(session.title)} ${metaLine}`
+								: displayTitle(session.title),
+							fg: current ? currentTheme.textMuted : currentTheme.warning,
+							wrapMode: "word",
+						}),
+					);
+					container.add(row);
+				}
+			}
+		}
+
 		container.requestRender();
 		props.api.renderer.requestRender();
 	};
 	const refreshSidebar = () => renderSidebar();
+	const refreshSessions = () => {
+		void refreshRecentSessions();
+	};
 
 	onCleanup(props.api.event.on("message.updated", refreshSidebar));
 	onCleanup(props.api.event.on("message.removed", refreshSidebar));
 	onCleanup(props.api.event.on("message.part.updated", refreshSidebar));
 	onCleanup(props.api.event.on("message.part.removed", refreshSidebar));
-	onCleanup(props.api.event.on("session.updated", refreshSidebar));
+	onCleanup(props.api.event.on("session.updated", refreshSessions));
 	onCleanup(props.api.event.on("session.status", refreshSidebar));
-	onCleanup(props.api.event.on("session.idle", refreshSidebar));
+	onCleanup(props.api.event.on("session.idle", refreshSessions));
 
 	return (
 		<box
 			ref={(ref) => {
 				container = ref;
 				renderSidebar();
+				void refreshRecentSessions();
 			}}
 		/>
 	);
