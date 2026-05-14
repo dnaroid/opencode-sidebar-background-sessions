@@ -14,7 +14,7 @@ Copy and paste this prompt to your LLM agent (OpenCode, Claude Code, AmpCode, Cu
 
 ```text
 Install and configure the OpenCode TUI plugin `opencode-sidebar-background-sessions` by following the instructions here:
-https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/main/docs/guide/installation.md
+https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/master/docs/guide/installation.md
 ```
 
 Or read the [Installation Guide](docs/guide/installation.md), but letting an agent edit the config is safer.
@@ -24,14 +24,19 @@ Or read the [Installation Guide](docs/guide/installation.md), but letting an age
 Fetch the installation guide and follow it:
 
 ```bash
-curl -s https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/main/docs/guide/installation.md
+curl -s https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/master/docs/guide/installation.md
 ```
 
 ### Manual install
 
 This is an OpenCode TUI plugin. It belongs in `tui.json`, not `opencode.json`.
 
-Add the npm package name to your TUI config:
+Install the npm package into your OpenCode config directory and point TUI at the installed package:
+
+```bash
+cd ~/.config/opencode
+bun add opencode-sidebar-background-sessions
+```
 
 - **macOS / Linux**: `~/.config/opencode/tui.json`
 - **Windows**: `%APPDATA%\opencode\tui.json`
@@ -39,7 +44,7 @@ Add the npm package name to your TUI config:
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-sidebar-background-sessions"],
+  "plugin": ["./node_modules/opencode-sidebar-background-sessions"],
 }
 ```
 
