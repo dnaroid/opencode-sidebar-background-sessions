@@ -6,6 +6,7 @@ import { onCleanup } from "solid-js";
 
 const id = "opencode-sidebar-background-sessions";
 const recentSessionsPageSize = 20;
+const recentSessionsFetchLimit = 1000;
 
 type TaskItem = {
 	sessionID?: string;
@@ -13,7 +14,10 @@ type TaskItem = {
 	subagent?: string;
 };
 
-type RecentSessionItem = Pick<Session, "id" | "title" | "agent" | "time">;
+type RecentSessionItem = Pick<
+	Session,
+	"id" | "title" | "agent" | "parentID" | "time"
+>;
 
 function displayTitle(title: string) {
 	return title
@@ -39,6 +43,12 @@ function partInputString(part: Part, key: string) {
 
 function taskMetaLine(item: TaskItem) {
 	return item.subagent ?? "";
+}
+
+function isSubagentSession(session: RecentSessionItem) {
+	return (
+		session.parentID !== undefined || /\(@.* subagent\)$/.test(session.title)
+	);
 }
 
 function taskItem(
@@ -85,6 +95,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	let recentSessionsHasNext = false;
 	let recentSessionsLoading = false;
 	let recentSessionsError = "";
+	let allRecentSessions: RecentSessionItem[] = [];
 	let recentSessions: RecentSessionItem[] = [];
 	let recentSessionsRequest = 0;
 	let renderScheduled = false;
@@ -149,6 +160,27 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		props.api.route.navigate("session", { sessionID: session.id });
 		scheduleRenderSidebar();
 	};
+	const applyRecentSessionsPage = () => {
+		const maxPage = Math.max(
+			0,
+			Math.ceil(allRecentSessions.length / recentSessionsPageSize) - 1,
+		);
+		recentSessionsPage = Math.min(recentSessionsPage, maxPage);
+		const start = recentSessionsPage * recentSessionsPageSize;
+		recentSessions = allRecentSessions.slice(
+			start,
+			start + recentSessionsPageSize,
+		);
+		recentSessionsHasNext =
+			start + recentSessionsPageSize < allRecentSessions.length;
+	};
+	const recentSessionsRangeLabel = () => {
+		const total = allRecentSessions.length;
+		if (total === 0) return "0/0";
+		const start = recentSessionsPage * recentSessionsPageSize + 1;
+		const end = start + recentSessions.length - 1;
+		return `${start}-${end}/${total}`;
+	};
 	const refreshRecentSessions = async () => {
 		const request = ++recentSessionsRequest;
 		recentSessionsLoading = true;
@@ -156,9 +188,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		renderSidebar();
 
 		const response = await props.api.client.session.list({
-			limit: recentSessionsPageSize + 1,
+			limit: recentSessionsFetchLimit,
 			scope: "project",
-			start: recentSessionsPage * recentSessionsPageSize,
 		});
 		if (request !== recentSessionsRequest) return;
 
@@ -169,21 +200,24 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			return;
 		}
 
-		const sessions = response.data ?? [];
-		recentSessions = sessions.slice(0, recentSessionsPageSize);
-		recentSessionsHasNext = sessions.length > recentSessionsPageSize;
+		allRecentSessions = (response.data ?? []).filter(
+			(session) => !isSubagentSession(session),
+		);
+		applyRecentSessionsPage();
 		renderSidebar();
 	};
 	const goToRecentSessionsPage = (page: number) => {
+		if (page < 0) return;
+		const maxPage = Math.max(
+			0,
+			Math.ceil(allRecentSessions.length / recentSessionsPageSize) - 1,
+		);
+		if (page > maxPage) return;
 		recentSessionsPage = page;
-		recentSessions = [];
-		recentSessionsHasNext = false;
-		recentSessionsLoading = true;
+		applyRecentSessionsPage();
+		recentSessionsLoading = false;
 		recentSessionsError = "";
 		scheduleRenderSidebar();
-		setTimeout(() => {
-			void refreshRecentSessions();
-		}, 0);
 	};
 	const renderSidebar = () => {
 		if (!container) return;
@@ -251,6 +285,15 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 
 			row.add(textColumn);
 			container.add(row);
+		}
+
+		if (items.length > 0) {
+			container.add(
+				new TextRenderable(ctx, {
+					content: " ",
+					fg: currentTheme.textMuted,
+				}),
+			);
 		}
 
 		const recentHeader = new BoxRenderable(ctx, {
@@ -353,51 +396,30 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			}
 
 			if (recentSessionsPage > 0 || recentSessionsHasNext) {
-				const pagination = new BoxRenderable(ctx, {
+				const previousEnabled = recentSessionsPage > 0;
+				const nextEnabled = recentSessionsHasNext;
+				const content = `${previousEnabled ? "←" : " "} ${recentSessionsRangeLabel()} ${nextEnabled ? "→" : " "}`;
+				const controls = new BoxRenderable(ctx, {
+					id: `${id}-recent-pagination`,
 					flexDirection: "row",
-					gap: 1,
+					onMouseDown: function (event) {
+						const localX = event.x - this.x;
+						if (previousEnabled && localX <= 1) {
+							goToRecentSessionsPage(recentSessionsPage - 1);
+							return;
+						}
+						if (nextEnabled && localX >= content.length - 2) {
+							goToRecentSessionsPage(recentSessionsPage + 1);
+						}
+					},
 				});
-
-				const previous = new BoxRenderable(ctx, {
-					onMouseDown:
-						recentSessionsPage > 0
-							? () => goToRecentSessionsPage(recentSessionsPage - 1)
-							: undefined,
-				});
-				previous.add(
+				controls.add(
 					new TextRenderable(ctx, {
-						content: "‹ Prev",
-						fg:
-							recentSessionsPage > 0
-								? currentTheme.text
-								: currentTheme.textMuted,
-					}),
-				);
-				pagination.add(previous);
-
-				pagination.add(
-					new TextRenderable(ctx, {
-						content: `Page ${recentSessionsPage + 1}`,
+						content,
 						fg: currentTheme.textMuted,
 					}),
 				);
-
-				const next = new BoxRenderable(ctx, {
-					onMouseDown: recentSessionsHasNext
-						? () => goToRecentSessionsPage(recentSessionsPage + 1)
-						: undefined,
-				});
-				next.add(
-					new TextRenderable(ctx, {
-						content: "Next ›",
-						fg: recentSessionsHasNext
-							? currentTheme.text
-							: currentTheme.textMuted,
-					}),
-				);
-				pagination.add(next);
-
-				container.add(pagination);
+				container.add(controls);
 			}
 		}
 
