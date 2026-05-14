@@ -11,13 +11,17 @@ const recentSessionsFetchLimit = 1000;
 type TaskItem = {
 	sessionID?: string;
 	title: string;
+	agent?: string;
+	model?: Session["model"];
 	subagent?: string;
 };
 
 type RecentSessionItem = Pick<
 	Session,
-	"id" | "title" | "agent" | "parentID" | "time"
+	"id" | "title" | "agent" | "model" | "parentID" | "time"
 >;
+
+type SessionDetails = Pick<Session, "id" | "agent" | "model">;
 
 function displayTitle(title: string) {
 	return title
@@ -41,8 +45,18 @@ function partInputString(part: Part, key: string) {
 	return part.state.input[key];
 }
 
+function modelLabel(model: Session["model"] | undefined) {
+	if (!model) return;
+	const provider = model.providerID ? `${model.providerID}/` : "";
+	const variant = model.variant ? `:${model.variant}` : "";
+	return `${provider}${model.id}${variant}`;
+}
+
 function taskMetaLine(item: TaskItem) {
-	return item.subagent ?? "";
+	const details = [item.agent ?? item.subagent, modelLabel(item.model)].filter(
+		(value) => value !== undefined && value !== "",
+	);
+	return details.join(" · ");
 }
 
 function isSubagentSession(session: RecentSessionItem) {
@@ -55,6 +69,7 @@ function taskItem(
 	part: Part,
 	completedBackgroundTaskIDs: Set<string>,
 	isSessionActive: (sessionID: string) => boolean,
+	sessionDetails: SessionDetails | undefined,
 ): TaskItem | undefined {
 	if (part.type !== "tool") return;
 	if (part.tool !== "task") return;
@@ -83,6 +98,8 @@ function taskItem(
 	return {
 		sessionID,
 		title,
+		agent: sessionDetails?.agent,
+		model: sessionDetails?.model,
 		subagent: partInputString(part, "subagent_type"),
 	};
 }
@@ -98,6 +115,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	let allRecentSessions: RecentSessionItem[] = [];
 	let recentSessions: RecentSessionItem[] = [];
 	let recentSessionsRequest = 0;
+	let sessionDetailsByID = new Map<string, SessionDetails>();
+	let sessionDetailRequests = new Set<string>();
 	let renderScheduled = false;
 	let activeSessionID = props.session_id;
 
@@ -116,6 +135,26 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		props.api.state.session
 			.messages(currentSessionID())
 			.flatMap((message) => props.api.state.part(message.id));
+	const requestSessionDetails = (sessionID: string) => {
+		if (sessionDetailsByID.has(sessionID)) return;
+		if (sessionDetailRequests.has(sessionID)) return;
+		sessionDetailRequests.add(sessionID);
+		void props.api.client.session
+			.get({ sessionID })
+			.then((response) => {
+				if (response.data) {
+					sessionDetailsByID = new Map(sessionDetailsByID).set(sessionID, {
+						id: response.data.id,
+						agent: response.data.agent,
+						model: response.data.model,
+					});
+					scheduleRenderSidebar();
+				}
+			})
+			.finally(() => {
+				sessionDetailRequests.delete(sessionID);
+			});
+	};
 	const list = () => {
 		const currentParts = parts();
 		const completedBackgroundTaskIDs = new Set(
@@ -130,12 +169,19 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				.filter((backgroundTaskID) => backgroundTaskID !== undefined),
 		);
 		return currentParts
-			.map((part) =>
-				taskItem(part, completedBackgroundTaskIDs, (sessionID) => {
-					const status = props.api.state.session.status(sessionID)?.type;
-					return status !== undefined && status !== "idle";
-				}),
-			)
+			.map((part) => {
+				const sessionID = partMetadataString(part, "sessionId");
+				if (sessionID) requestSessionDetails(sessionID);
+				return taskItem(
+					part,
+					completedBackgroundTaskIDs,
+					(sessionID) => {
+						const status = props.api.state.session.status(sessionID)?.type;
+						return status !== undefined && status !== "idle";
+					},
+					sessionID ? sessionDetailsByID.get(sessionID) : undefined,
+				);
+			})
 			.filter((item): item is TaskItem => item !== undefined)
 			.reverse();
 	};
@@ -203,6 +249,14 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			return;
 		}
 
+		sessionDetailsByID = new Map(sessionDetailsByID);
+		for (const session of response.data ?? []) {
+			sessionDetailsByID.set(session.id, {
+				id: session.id,
+				agent: session.agent,
+				model: session.model,
+			});
+		}
 		allRecentSessions = (response.data ?? []).filter(
 			(session) => !isSubagentSession(session),
 		);
