@@ -5,7 +5,7 @@ import { BoxRenderable, TextAttributes, TextRenderable } from "@opentui/core";
 import { onCleanup } from "solid-js";
 
 const id = "opencode-sidebar-background-sessions";
-const recentSessionsPageSize = 20;
+const recentSessionsPageSize = 15;
 const recentSessionsFetchLimit = 1000;
 
 type TaskItem = {
@@ -174,12 +174,16 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		recentSessionsHasNext =
 			start + recentSessionsPageSize < allRecentSessions.length;
 	};
-	const recentSessionsRangeLabel = () => {
+	const recentSessionsPageCount = () => {
+		return Math.max(
+			1,
+			Math.ceil(allRecentSessions.length / recentSessionsPageSize),
+		);
+	};
+	const recentSessionsPageLabel = () => {
 		const total = allRecentSessions.length;
 		if (total === 0) return "0/0";
-		const start = recentSessionsPage * recentSessionsPageSize + 1;
-		const end = start + recentSessions.length - 1;
-		return `${start}-${end}/${total}`;
+		return `${recentSessionsPage + 1}/${recentSessionsPageCount()}`;
 	};
 	const refreshRecentSessions = async () => {
 		const request = ++recentSessionsRequest;
@@ -324,10 +328,13 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			if (recentSessionsError) {
 				const row = new BoxRenderable(ctx, {
 					flexDirection: "row",
-					gap: 1,
 				});
 				row.add(
-					new TextRenderable(ctx, { content: "•", fg: currentTheme.error }),
+					new TextRenderable(ctx, {
+						content: "•",
+						fg: currentTheme.error,
+						width: 2,
+					}),
 				);
 				row.add(
 					new TextRenderable(ctx, {
@@ -340,10 +347,13 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			} else if (recentSessionsLoading && recentSessions.length === 0) {
 				const row = new BoxRenderable(ctx, {
 					flexDirection: "row",
-					gap: 1,
 				});
 				row.add(
-					new TextRenderable(ctx, { content: "•", fg: currentTheme.success }),
+					new TextRenderable(ctx, {
+						content: "•",
+						fg: currentTheme.success,
+						width: 2,
+					}),
 				);
 				row.add(
 					new TextRenderable(ctx, {
@@ -355,10 +365,13 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			} else if (recentSessions.length === 0) {
 				const row = new BoxRenderable(ctx, {
 					flexDirection: "row",
-					gap: 1,
 				});
 				row.add(
-					new TextRenderable(ctx, { content: "•", fg: currentTheme.textMuted }),
+					new TextRenderable(ctx, {
+						content: "•",
+						fg: currentTheme.textMuted,
+						width: 2,
+					}),
 				);
 				row.add(
 					new TextRenderable(ctx, {
@@ -373,13 +386,13 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 					const row = new BoxRenderable(ctx, {
 						id: `${id}-recent-row-${session.id}`,
 						flexDirection: "row",
-						gap: 1,
 						onMouseDown: current ? undefined : () => openRecentSession(session),
 					});
 					row.add(
 						new TextRenderable(ctx, {
 							content: "•",
 							fg: current ? currentTheme.text : currentTheme.success,
+							width: 2,
 						}),
 					);
 
@@ -395,28 +408,46 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				}
 			}
 
-			if (recentSessionsPage > 0 || recentSessionsHasNext) {
+			if (
+				!recentSessionsError &&
+				!recentSessionsLoading &&
+				allRecentSessions.length > 0
+			) {
 				const previousEnabled = recentSessionsPage > 0;
 				const nextEnabled = recentSessionsHasNext;
-				const content = `${previousEnabled ? "←" : " "} ${recentSessionsRangeLabel()} ${nextEnabled ? "→" : " "}`;
+				const label = recentSessionsPageLabel();
 				const controls = new BoxRenderable(ctx, {
 					id: `${id}-recent-pagination`,
 					flexDirection: "row",
 					onMouseDown: function (event) {
 						const localX = event.x - this.x;
-						if (previousEnabled && localX <= 1) {
+						if (previousEnabled && localX < 2) {
 							goToRecentSessionsPage(recentSessionsPage - 1);
 							return;
 						}
-						if (nextEnabled && localX >= content.length - 2) {
+						if (nextEnabled && localX >= label.length + 3) {
 							goToRecentSessionsPage(recentSessionsPage + 1);
 						}
 					},
 				});
 				controls.add(
 					new TextRenderable(ctx, {
-						content,
+						content: "←",
+						fg: previousEnabled ? currentTheme.text : currentTheme.textMuted,
+						width: 2,
+					}),
+				);
+				controls.add(
+					new TextRenderable(ctx, {
+						content: label,
 						fg: currentTheme.textMuted,
+					}),
+				);
+				controls.add(
+					new TextRenderable(ctx, {
+						content: "→",
+						fg: nextEnabled ? currentTheme.text : currentTheme.textMuted,
+						marginLeft: 1,
 					}),
 				);
 				container.add(controls);
