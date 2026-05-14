@@ -1,15 +1,15 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
-import { createMemo, For, Show } from "solid-js";
+import { BoxRenderable, TextAttributes, TextRenderable } from "@opentui/core";
+import { onCleanup } from "solid-js";
 
 const id = "opencode-sidebar-background-sessions";
 
 type TaskItem = {
-	sessionID: string;
+	sessionID?: string;
 	title: string;
 	subagent?: string;
-	modelID?: string;
 };
 
 function displayTitle(title: string) {
@@ -34,25 +34,8 @@ function partInputString(part: Part, key: string) {
 	return part.state.input[key];
 }
 
-function partModelID(part: Part) {
-	if (part.type !== "tool") return;
-	if (part.state.status === "pending") return;
-	if (!part.state.metadata) return;
-	if (
-		!part.state.metadata.model ||
-		typeof part.state.metadata.model !== "object"
-	)
-		return;
-	if (
-		!("modelID" in part.state.metadata.model) ||
-		typeof part.state.metadata.model.modelID !== "string"
-	)
-		return;
-	return part.state.metadata.model.modelID;
-}
-
 function taskMetaLine(item: TaskItem) {
-	return [item.subagent, item.modelID].filter(Boolean).join(" ");
+	return item.subagent ?? "";
 }
 
 function taskItem(
@@ -63,37 +46,46 @@ function taskItem(
 	if (part.type !== "tool") return;
 	if (part.tool !== "task") return;
 	const sessionID = partMetadataString(part, "sessionId");
-	if (!sessionID) return;
-	if (isSessionIdle(sessionID)) return;
+	if (sessionID && isSessionIdle(sessionID)) return;
 
 	if (part.state.status === "completed") {
 		const backgroundTaskID = partMetadataString(part, "backgroundTaskId");
-		if (!backgroundTaskID) return;
-		if (completedBackgroundTaskIDs.has(backgroundTaskID)) return;
+		if (backgroundTaskID && completedBackgroundTaskIDs.has(backgroundTaskID))
+			return;
 	}
 
-	if (part.state.status !== "running" && part.state.status !== "completed")
+	if (
+		part.state.status !== "pending" &&
+		part.state.status !== "running" &&
+		part.state.status !== "completed"
+	)
 		return;
+
+	const title =
+		partInputString(part, "description") ??
+		partInputString(part, "prompt") ??
+		sessionID;
+	if (!title) return;
 
 	return {
 		sessionID,
-		title:
-			part.state.title ?? partInputString(part, "description") ?? sessionID,
+		title,
 		subagent: partInputString(part, "subagent_type"),
-		modelID: partModelID(part),
 	};
 }
 
 function View(props: { api: TuiPluginApi; session_id: string }) {
 	const theme = () => props.api.theme.current;
-	const parts = createMemo(() =>
+	let container: BoxRenderable | undefined;
+
+	const parts = () =>
 		props.api.state.session
 			.messages(props.session_id)
-			.flatMap((message) => props.api.state.part(message.id)),
-	);
-	const list = createMemo(() => {
+			.flatMap((message) => props.api.state.part(message.id));
+	const list = () => {
+		const currentParts = parts();
 		const completedBackgroundTaskIDs = new Set(
-			parts()
+			currentParts
 				.filter(
 					(part) =>
 						part.type === "tool" &&
@@ -103,7 +95,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				.map((part) => partMetadataString(part, "backgroundTaskId"))
 				.filter((backgroundTaskID) => backgroundTaskID !== undefined),
 		);
-		return parts()
+		return currentParts
 			.map((part) =>
 				taskItem(
 					part,
@@ -114,38 +106,107 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			)
 			.filter((item): item is TaskItem => item !== undefined)
 			.reverse();
-	});
+	};
+	const clearContainer = () => {
+		if (!container) return;
+		for (const child of [...container.getChildren()]) {
+			container.remove(child.id);
+			child.destroyRecursively();
+		}
+	};
+	const openSubagentSession = (item: TaskItem) => {
+		if (!item.sessionID) return;
+		props.api.route.navigate("session", { sessionID: item.sessionID });
+	};
+	const renderSidebar = () => {
+		if (!container) return;
+		clearContainer();
+
+		const items = list();
+		if (items.length === 0) {
+			container.requestRender();
+			props.api.renderer.requestRender();
+			return;
+		}
+
+		const ctx = container.ctx;
+		const currentTheme = theme();
+		const header = new BoxRenderable(ctx, {
+			flexDirection: "row",
+			gap: 1,
+		});
+		header.add(
+			new TextRenderable(ctx, {
+				content: "Running Agents",
+				fg: currentTheme.text,
+				attributes: TextAttributes.BOLD,
+			}),
+		);
+		container.add(header);
+
+		for (const item of items) {
+			const row = new BoxRenderable(ctx, {
+				id: item.sessionID ? `${id}-row-${item.sessionID}` : undefined,
+				flexDirection: "row",
+				gap: 1,
+				onMouseDown: item.sessionID
+					? () => openSubagentSession(item)
+					: undefined,
+			});
+			row.add(
+				new TextRenderable(ctx, {
+					content: "•",
+					fg: currentTheme.success,
+				}),
+			);
+
+			const textColumn = new BoxRenderable(ctx, {
+				flexGrow: 1,
+				flexShrink: 1,
+			});
+			textColumn.add(
+				new TextRenderable(ctx, {
+					content: displayTitle(item.title),
+					fg: currentTheme.warning,
+					wrapMode: "word",
+				}),
+			);
+
+			const metaLine = taskMetaLine(item);
+			if (metaLine) {
+				textColumn.add(
+					new TextRenderable(ctx, {
+						content: metaLine,
+						fg: currentTheme.textMuted,
+						wrapMode: "none",
+					}),
+				);
+			}
+
+			row.add(textColumn);
+			container.add(row);
+		}
+
+		container.requestRender();
+		props.api.renderer.requestRender();
+	};
+	const refreshSidebar = () => renderSidebar();
+
+	onCleanup(props.api.event.on("message.updated", refreshSidebar));
+	onCleanup(props.api.event.on("message.removed", refreshSidebar));
+	onCleanup(props.api.event.on("message.part.updated", refreshSidebar));
+	onCleanup(props.api.event.on("message.part.removed", refreshSidebar));
+	onCleanup(props.api.event.on("session.updated", refreshSidebar));
+	onCleanup(props.api.event.on("session.status", refreshSidebar));
+	onCleanup(props.api.event.on("session.idle", refreshSidebar));
 
 	return (
-		<Show when={list().length > 0}>
-			<box>
-				<box flexDirection="row" gap={1}>
-					<text fg={theme().text}>
-						<b>Running Agents</b>
-					</text>
-				</box>
-				<For each={list()}>
-					{(item) => {
-						const metaLine = taskMetaLine(item);
-						return (
-							<box flexDirection="row" gap={1}>
-								<text fg={theme().success}>•</text>
-								<box flexGrow={1} flexShrink={1}>
-									<text fg={theme().warning} wrapMode="word">
-										{displayTitle(item.title)}
-									</text>
-									<Show when={metaLine}>
-										<text fg={theme().textMuted} wrapMode="none">
-											{metaLine}
-										</text>
-									</Show>
-								</box>
-							</box>
-						);
-					}}
-				</For>
-			</box>
-		</Show>
+		<box
+			ref={(ref) => {
+				container = ref;
+				renderSidebar();
+			}}
+		/>
 	);
 }
 
