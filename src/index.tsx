@@ -54,17 +54,17 @@ function isSubagentSession(session: RecentSessionItem) {
 function taskItem(
 	part: Part,
 	completedBackgroundTaskIDs: Set<string>,
-	isSessionIdle: (sessionID: string) => boolean,
+	isSessionActive: (sessionID: string) => boolean,
 ): TaskItem | undefined {
 	if (part.type !== "tool") return;
 	if (part.tool !== "task") return;
 	const sessionID = partMetadataString(part, "sessionId");
-	if (sessionID && isSessionIdle(sessionID)) return;
 
 	if (part.state.status === "completed") {
 		const backgroundTaskID = partMetadataString(part, "backgroundTaskId");
 		if (backgroundTaskID && completedBackgroundTaskIDs.has(backgroundTaskID))
 			return;
+		if (!sessionID || !isSessionActive(sessionID)) return;
 	}
 
 	if (
@@ -131,12 +131,10 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		);
 		return currentParts
 			.map((part) =>
-				taskItem(
-					part,
-					completedBackgroundTaskIDs,
-					(sessionID) =>
-						props.api.state.session.status(sessionID)?.type === "idle",
-				),
+				taskItem(part, completedBackgroundTaskIDs, (sessionID) => {
+					const status = props.api.state.session.status(sessionID)?.type;
+					return status !== undefined && status !== "idle";
+				}),
 			)
 			.filter((item): item is TaskItem => item !== undefined)
 			.reverse();
