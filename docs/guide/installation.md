@@ -28,24 +28,38 @@ This package is a TUI plugin, not a server plugin.
    - **macOS / Linux**: `~/.config/opencode/tui.json`
    - **Windows**: `%APPDATA%\opencode\tui.json`
 
-3. Ensure the file has the TUI schema and a `plugin` array containing `opencode-sidebar-background-sessions`.
+3. Install the package into your OpenCode config directory:
+
+   ```bash
+   cd ~/.config/opencode
+   bun add opencode-sidebar-background-sessions
+   ```
+
+   If Bun reports peer dependency warnings for `@opencode-ai/plugin` or `@opencode-ai/sdk`, install versions that match your OpenCode binary:
+
+   ```bash
+   opencode --version
+   bun add @opencode-ai/plugin@<opencode-version> @opencode-ai/sdk@<opencode-version>
+   ```
+
+4. Ensure `tui.json` has the TUI schema and a `plugin` array pointing at the installed package directory.
 
    Minimal config:
 
    ```jsonc
    {
      "$schema": "https://opencode.ai/tui.json",
-     "plugin": ["opencode-sidebar-background-sessions"],
+     "plugin": ["./node_modules/opencode-sidebar-background-sessions"],
    }
    ```
 
-   If `plugin` already exists, append the package name without removing existing plugins.
+   If `plugin` already exists, append the package path without removing existing plugins.
 
-4. Leave `~/.config/opencode/opencode.json` unchanged unless another unrelated task requires it.
+5. Ensure `~/.config/opencode/opencode.json` does **not** list `opencode-sidebar-background-sessions` in its `plugin` array. This package is TUI-only and should load from `tui.json`, not the server plugin config.
 
-5. Restart OpenCode.
+6. Restart OpenCode.
 
-6. Start any background task agent. The sidebar should show `Running Agents` above the normal sidebar content.
+7. Start any background task agent. The sidebar should show `Running Agents` above the normal sidebar content.
 
 ## Local development install
 
