@@ -45,6 +45,41 @@ function partInputString(part: Part, key: string) {
 	return part.state.input[key];
 }
 
+type BackgroundTaskState = "active" | "terminal";
+
+function backgroundOutputTaskState(part: Part): BackgroundTaskState | undefined {
+	if (part.type !== "tool") return;
+	if (part.tool !== "background_output") return;
+	if (part.state.status === "pending" || part.state.status === "running")
+		return "active";
+	const output = (part.state as { output?: unknown }).output;
+	if (typeof output !== "string") return;
+	const statusMatch =
+		output.match(
+			/\|\s*Status\s*\|\s*\*\*(running|queued|pending|completed|failed|error|cancelled|canceled)\*\*\s*\|/i,
+		) ??
+		output.match(
+			/\bStatus\s*:\s*(running|queued|pending|completed|failed|error|cancelled|canceled)\b/i,
+		);
+	const status = statusMatch?.[1]?.toLowerCase();
+	if (status === "running" || status === "queued" || status === "pending")
+		return "active";
+	if (
+		status === "completed" ||
+		status === "failed" ||
+		status === "error" ||
+		status === "cancelled" ||
+		status === "canceled"
+	)
+		return "terminal";
+	if (/still\s+running/i.test(output)) return "active";
+	if (
+		/#\s*Task Result\b/i.test(output) ||
+		/Task\s+\d+\s+(?:completed|failed|error|cancelled|canceled)/i.test(output)
+	)
+		return "terminal";
+}
+
 function modelLabel(model: Session["model"] | undefined) {
 	if (!model) return;
 	const name = model.id.split("/").at(-1) ?? model.id;
@@ -67,7 +102,8 @@ function isSubagentSession(session: RecentSessionItem) {
 
 function taskItem(
 	part: Part,
-	completedBackgroundTaskIDs: Set<string>,
+	terminalBackgroundTaskIDs: Set<string>,
+	activeBackgroundTaskIDs: Set<string>,
 	isSessionActive: (sessionID: string) => boolean,
 	sessionDetails: SessionDetails | undefined,
 ): TaskItem | undefined {
@@ -77,9 +113,14 @@ function taskItem(
 
 	if (part.state.status === "completed") {
 		const backgroundTaskID = partMetadataString(part, "backgroundTaskId");
-		if (backgroundTaskID && completedBackgroundTaskIDs.has(backgroundTaskID))
+		if (backgroundTaskID && terminalBackgroundTaskIDs.has(backgroundTaskID))
 			return;
-		if (!sessionID || !isSessionActive(sessionID)) return;
+		if (backgroundTaskID && activeBackgroundTaskIDs.has(backgroundTaskID)) {
+			// The task tool completes as soon as the sub-agent is spawned. A
+			// background_output call can also complete while only reporting that the
+			// task is still running, so keep the item visible until a terminal
+			// background_output result arrives.
+		} else if (!sessionID || !isSessionActive(sessionID)) return;
 	}
 
 	if (
@@ -157,24 +198,23 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	};
 	const list = () => {
 		const currentParts = parts();
-		const completedBackgroundTaskIDs = new Set(
-			currentParts
-				.filter(
-					(part) =>
-						part.type === "tool" &&
-						part.tool === "background_output" &&
-						part.state.status !== "running",
-				)
-				.map((part) => partMetadataString(part, "backgroundTaskId"))
-				.filter((backgroundTaskID) => backgroundTaskID !== undefined),
-		);
+		const terminalBackgroundTaskIDs = new Set<string>();
+		const activeBackgroundTaskIDs = new Set<string>();
+		for (const part of currentParts) {
+			const backgroundTaskID = partMetadataString(part, "backgroundTaskId");
+			if (!backgroundTaskID) continue;
+			const state = backgroundOutputTaskState(part);
+			if (state === "terminal") terminalBackgroundTaskIDs.add(backgroundTaskID);
+			else if (state === "active") activeBackgroundTaskIDs.add(backgroundTaskID);
+		}
 		return currentParts
 			.map((part) => {
 				const sessionID = partMetadataString(part, "sessionId");
 				if (sessionID) requestSessionDetails(sessionID);
 				return taskItem(
 					part,
-					completedBackgroundTaskIDs,
+					terminalBackgroundTaskIDs,
+					activeBackgroundTaskIDs,
 					(sessionID) => {
 						const status = props.api.state.session.status(sessionID)?.type;
 						return status !== undefined && status !== "idle";

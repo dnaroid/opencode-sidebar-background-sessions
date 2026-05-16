@@ -34,6 +34,7 @@ type ToolPartFixture = {
 		status: "pending" | "running" | "completed" | "error";
 		input: Record<string, string>;
 		metadata?: Record<string, string>;
+		output?: string;
 	};
 };
 
@@ -83,7 +84,10 @@ function taskPart(
 	};
 }
 
-function backgroundOutputPart(backgroundTaskID: string): ToolPartFixture {
+function backgroundOutputPart(
+	backgroundTaskID: string,
+	output = "# Task Result\n\nTask completed successfully.",
+): ToolPartFixture {
 	return {
 		id: `background-output-${backgroundTaskID}`,
 		type: "tool",
@@ -94,6 +98,7 @@ function backgroundOutputPart(backgroundTaskID: string): ToolPartFixture {
 			metadata: {
 				backgroundTaskId: backgroundTaskID,
 			},
+			output,
 		},
 	};
 }
@@ -395,6 +400,27 @@ test("retro completed task records do not render as running agents unless their 
 	});
 	frame = await backgroundOutputSidebar.frame();
 	expect(frame).not.toContain("Running Agents");
+
+	const runningBackgroundOutputSidebar = await renderSidebar({
+		initialSessionID: "retro",
+		sessions: [session("retro", "Retro")],
+		messagesBySession,
+		partsByMessage: new Map([
+			[
+				"m1",
+				[
+					completedTask,
+					backgroundOutputPart(
+						"bg-child",
+						"# Task Status\n\n| Field | Value |\n| --- | --- |\n| Status | **running** |\n",
+					),
+				],
+			],
+		]),
+	});
+	frame = await runningBackgroundOutputSidebar.frame();
+	expect(frame).toContain("Running Agents");
+	expect(frame).toContain("Task for child");
 
 	const activeSidebar = await renderSidebar({
 		initialSessionID: "retro",
