@@ -47,7 +47,9 @@ function partInputString(part: Part, key: string) {
 
 type BackgroundTaskState = "active" | "terminal";
 
-function backgroundOutputTaskState(part: Part): BackgroundTaskState | undefined {
+function backgroundOutputTaskState(
+	part: Part,
+): BackgroundTaskState | undefined {
 	if (part.type !== "tool") return;
 	if (part.tool !== "background_output") return;
 	if (part.state.status === "pending" || part.state.status === "running")
@@ -205,7 +207,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			if (!backgroundTaskID) continue;
 			const state = backgroundOutputTaskState(part);
 			if (state === "terminal") terminalBackgroundTaskIDs.add(backgroundTaskID);
-			else if (state === "active") activeBackgroundTaskIDs.add(backgroundTaskID);
+			else if (state === "active")
+				activeBackgroundTaskIDs.add(backgroundTaskID);
 		}
 		return currentParts
 			.map((part) => {
@@ -346,7 +349,10 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 				flexDirection: "row",
 				gap: 1,
 				onMouseDown: item.sessionID
-					? () => openSubagentSession(item)
+					? (event) => {
+							event.stopPropagation();
+							openSubagentSession(item);
+						}
 					: undefined,
 			});
 			row.add(
@@ -398,7 +404,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 			flexDirection: "row",
 			gap: 1,
 			width: "100%",
-			onMouseDown: () => {
+			onMouseDown: (event) => {
+				event.stopPropagation();
 				recentSessionsCollapsed = !recentSessionsCollapsed;
 				scheduleRenderSidebar();
 			},
@@ -532,7 +539,12 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 					const row = new BoxRenderable(ctx, {
 						id: `${id}-recent-row-${session.id}`,
 						flexDirection: "row",
-						onMouseDown: current ? undefined : () => openRecentSession(session),
+						onMouseDown: current
+							? undefined
+							: (event) => {
+									event.stopPropagation();
+									openRecentSession(session);
+								},
 					});
 					row.add(
 						new TextRenderable(ctx, {

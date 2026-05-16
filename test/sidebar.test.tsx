@@ -50,6 +50,7 @@ type HarnessOptions = {
 	partsByMessage?: Map<string, ToolPartFixture[]>;
 	statusBySession?: Map<string, { type: string }>;
 	getSession?: (sessionID: string) => Promise<{ data?: SessionFixture }>;
+	trackParentMouseDown?: boolean;
 };
 
 function session(id: string, title = `Session ${id}`): SessionFixture {
@@ -121,6 +122,7 @@ async function renderSidebar(options: HarnessOptions = {}) {
 	let slot:
 		| ((ctx: unknown, props: { session_id: string }) => unknown)
 		| undefined;
+	let parentMouseDowns = 0;
 
 	const route = {
 		current: { name: "session", params: { sessionID: initialSessionID } },
@@ -216,6 +218,11 @@ async function renderSidebar(options: HarnessOptions = {}) {
 			height: 28,
 		},
 	);
+	if (options.trackParentMouseDown) {
+		setup.renderer.root.onMouseDown = () => {
+			parentMouseDowns += 1;
+		};
+	}
 	cleanupRenderers.push(() => setup.renderer.destroy());
 
 	const frame = async () => {
@@ -230,6 +237,7 @@ async function renderSidebar(options: HarnessOptions = {}) {
 		listCalls,
 		getCalls,
 		navigations,
+		parentMouseDowns: () => parentMouseDowns,
 		emit(type: string) {
 			for (const handler of eventHandlers.get(type) ?? []) handler();
 		},
@@ -507,6 +515,46 @@ test("running agents and sessions keep separate sections and the sessions header
 		name: "session",
 		params: { sessionID: "child" },
 	});
+});
+
+test("sidebar navigation clicks do not bubble into the host session view", async () => {
+	const messagesBySession = new Map([["parent", [{ id: "m1" }]]]);
+	const sidebar = await renderSidebar({
+		initialSessionID: "parent",
+		sessions: [session("parent", "Parent"), session("other", "Other")],
+		messagesBySession,
+		partsByMessage: new Map([["m1", [taskPart("child", "running")]]]),
+		statusBySession: new Map([["child", { type: "running" }]]),
+		trackParentMouseDown: true,
+	});
+
+	let frame = await sidebar.frame();
+	await sidebar.mockMouse.click(2, 1);
+	frame = await sidebar.frame();
+	expect(sidebar.navigations).toContainEqual({
+		name: "session",
+		params: { sessionID: "child" },
+	});
+	expect(sidebar.parentMouseDowns()).toBe(0);
+
+	let sessionsY = frame
+		.split("\n")
+		.findIndex((line) => line.includes("▶ Sessions"));
+	await sidebar.mockMouse.click(2, sessionsY);
+	frame = await sidebar.frame();
+	expect(frame).toContain("▼ Sessions");
+	expect(sidebar.parentMouseDowns()).toBe(0);
+
+	sessionsY = frame
+		.split("\n")
+		.findIndex((line) => line.includes("▼ Sessions"));
+	await sidebar.mockMouse.click(2, sessionsY + 2);
+	await sidebar.frame();
+	expect(sidebar.navigations).toContainEqual({
+		name: "session",
+		params: { sessionID: "other" },
+	});
+	expect(sidebar.parentMouseDowns()).toBe(0);
 });
 
 test("session events refresh the project sessions list", async () => {
