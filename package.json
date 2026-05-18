@@ -42,6 +42,8 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && bun ./scripts/build.ts && tsc --emitDeclarationOnly",
+		"plugin:install": "mkdir -p ~/.config/opencode && bun add --cwd ~/.config/opencode opencode-sidebar-background-sessions",
+		"publish:npm": "bun publish --access public",
 		"test": "bun run build && bun test test",
 		"test:coverage": "bun run build && bun test --coverage test",
 		"typecheck": "tsc --noEmit",
