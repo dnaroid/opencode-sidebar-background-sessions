@@ -35,6 +35,8 @@ This package is a TUI plugin, not a server plugin.
    bun add opencode-sidebar-background-sessions
    ```
 
+   The npm package includes the pre-built `dist/` files. End users should not need to clone this repository or run `bun run build` when installing from npm.
+
    If Bun reports peer dependency warnings for `@opencode-ai/plugin` or `@opencode-ai/sdk`, install versions that match your OpenCode binary:
 
    ```bash
@@ -60,6 +62,28 @@ This package is a TUI plugin, not a server plugin.
 6. Restart OpenCode.
 
 7. Start any background task agent. The sidebar should show `Running Agents` above the normal sidebar content.
+
+## Troubleshooting missing `dist/`
+
+If OpenCode reports that `dist/index.js` is missing, the installed package is incomplete or stale. Reinstall the latest npm package first:
+
+```bash
+cd ~/.config/opencode
+bun remove opencode-sidebar-background-sessions
+bun add opencode-sidebar-background-sessions@latest
+test -f node_modules/opencode-sidebar-background-sessions/dist/index.js
+```
+
+Only build from source as a temporary workaround for a broken local checkout or a broken npm publish:
+
+```bash
+git clone https://github.com/dnaroid/opencode-sidebar-background-sessions.git /tmp/opencode-sidebar-bg-build
+cd /tmp/opencode-sidebar-bg-build
+bun install
+bun run build
+cp -R dist ~/.config/opencode/node_modules/opencode-sidebar-background-sessions/
+rm -rf /tmp/opencode-sidebar-bg-build
+```
 
 ## Local development install
 
