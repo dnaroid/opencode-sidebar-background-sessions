@@ -74,12 +74,12 @@ function backgroundOutputTaskState(
 		status === "canceled"
 	)
 		return "terminal";
-	if (/still\s+running/i.test(output)) return "active";
 	if (
-		/#\s*Task Result\b/i.test(output) ||
+		/(?:^|\n)\s*#?\s*Task Result\b/i.test(output) ||
 		/Task\s+\d+\s+(?:completed|failed|error|cancelled|canceled)/i.test(output)
 	)
 		return "terminal";
+	if (/still\s+running/i.test(output)) return "active";
 }
 
 function modelLabel(model: Session["model"] | undefined) {
@@ -579,6 +579,10 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	const refreshSessions = () => {
 		void refreshRecentSessions();
 	};
+	const refreshIdleSession = () => {
+		renderSidebar();
+		void refreshRecentSessions();
+	};
 
 	onCleanup(props.api.event.on("message.updated", refreshSidebar));
 	onCleanup(props.api.event.on("message.removed", refreshSidebar));
@@ -586,7 +590,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	onCleanup(props.api.event.on("message.part.removed", refreshSidebar));
 	onCleanup(props.api.event.on("session.updated", refreshSessions));
 	onCleanup(props.api.event.on("session.status", refreshSidebar));
-	onCleanup(props.api.event.on("session.idle", refreshSessions));
+	onCleanup(props.api.event.on("session.idle", refreshIdleSession));
 
 	return (
 		<box

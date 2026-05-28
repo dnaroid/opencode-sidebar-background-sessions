@@ -430,6 +430,28 @@ test("retro completed task records do not render as running agents unless their 
 	expect(frame).toContain("Running Agents");
 	expect(frame).toContain("Task for child");
 
+	const completedTaskResultSidebar = await renderSidebar({
+		initialSessionID: "retro",
+		sessions: [session("retro", "Retro")],
+		messagesBySession,
+		partsByMessage: new Map([
+			[
+				"m1",
+				[
+					completedTask,
+					backgroundOutputPart(
+						"bg-child",
+						"Task Result\n\nTask ID: bg-child\nDescription: Analyze hot paths\nDuration: 1m\n\n---\n\nFind what is still running every frame.",
+					),
+				],
+			],
+		]),
+		statusBySession: new Map([["child", { type: "busy" }]]),
+	});
+	frame = await completedTaskResultSidebar.frame();
+	expect(frame).not.toContain("Running Agents");
+	expect(frame).not.toContain("Task for child");
+
 	const activeSidebar = await renderSidebar({
 		initialSessionID: "retro",
 		sessions: [session("retro", "Retro")],
@@ -572,4 +594,32 @@ test("session events refresh the project sessions list", async () => {
 	frame = await sidebar.frame();
 	expect(frame).toContain("▶ Sessions");
 	expect(sidebar.listCalls).toHaveLength(2);
+});
+
+test("idle session events immediately remove completed running agents while sessions reload", async () => {
+	const pendingList = deferred<{ data?: SessionFixture[] }>();
+	const messagesBySession = new Map([["parent", [{ id: "m1" }]]]);
+	const statusBySession = new Map([["child", { type: "busy" }]]);
+	const sidebar = await renderSidebar({
+		initialSessionID: "parent",
+		listSessions: () => pendingList.promise,
+		messagesBySession,
+		partsByMessage: new Map([["m1", [taskPart("child", "completed")]]]),
+		statusBySession,
+	});
+
+	let frame = await sidebar.frame();
+	expect(frame).toContain("Running Agents");
+	expect(frame).toContain("Task for child");
+
+	statusBySession.delete("child");
+	sidebar.emit("session.idle");
+	frame = await sidebar.frame();
+	expect(frame).not.toContain("Running Agents");
+	expect(frame).not.toContain("Task for child");
+	expect(sidebar.listCalls).toHaveLength(2);
+
+	pendingList.resolve({ data: [session("parent", "Parent")] });
+	frame = await sidebar.frame();
+	expect(frame).toContain("▶ Sessions");
 });
