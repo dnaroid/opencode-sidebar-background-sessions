@@ -83,6 +83,22 @@ Restart OpenCode after installing. The sidebar will render the `Sessions` accord
 
 Do not use `opencode plugin -g` for this package if your OpenCode version writes plugin entries to `opencode.json`; that command is for server plugins, while this package is loaded by the TUI plugin runtime.
 
+### Updates
+
+When installed from npm under `~/.config/opencode/node_modules`, the plugin checks npm on startup and updates itself with:
+
+```bash
+bun add opencode-sidebar-background-sessions@latest
+```
+
+The running OpenCode process keeps the old bundle in memory, so after an automatic update the sidebar shows a restart notice. Restart OpenCode to load the new version.
+
+To disable automatic updates, start OpenCode with:
+
+```bash
+OPENCODE_SIDEBAR_BACKGROUND_SESSIONS_AUTO_UPDATE=0 opencode
+```
+
 ## Local development install
 
 From this package directory:

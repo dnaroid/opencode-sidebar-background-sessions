@@ -2,11 +2,223 @@
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part, Session } from "@opencode-ai/sdk/v2";
 import { BoxRenderable, TextAttributes, TextRenderable } from "@opentui/core";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { onCleanup } from "solid-js";
 
 const id = "opencode-sidebar-background-sessions";
+const version = __PLUGIN_VERSION__;
 const recentSessionsPageSize = 15;
 const recentSessionsFetchLimit = 1000;
+const updateStateFile = `.${id}-update.json`;
+const updateCheckIntervalMs = 6 * 60 * 60 * 1000;
+
+declare const __PLUGIN_VERSION__: string;
+
+type SelfUpdateState =
+	| { status: "idle" | "checking" | "skipped" | "current"; message?: string }
+	| {
+			status: "updating" | "updated" | "error";
+			currentVersion: string;
+			latestVersion: string;
+			message?: string;
+	  };
+
+type SelfUpdateCache = {
+	lastCheck?: number;
+	checkedVersion?: string;
+};
+
+let selfUpdateStarted = false;
+let selfUpdateState: SelfUpdateState = { status: "idle" };
+const selfUpdateListeners = new Set<() => void>();
+
+function emitSelfUpdateState(state: SelfUpdateState) {
+	selfUpdateState = state;
+	for (const listener of selfUpdateListeners) listener();
+}
+
+function onSelfUpdateStateChange(listener: () => void) {
+	selfUpdateListeners.add(listener);
+	return () => selfUpdateListeners.delete(listener);
+}
+
+function compareVersions(left: string, right: string) {
+	const leftParts = left.split(/[.-]/).map((part) => Number.parseInt(part, 10));
+	const rightParts = right.split(/[.-]/).map((part) => Number.parseInt(part, 10));
+	const length = Math.max(leftParts.length, rightParts.length, 3);
+	for (let index = 0; index < length; index += 1) {
+		const leftPart = Number.isFinite(leftParts[index]) ? leftParts[index] : 0;
+		const rightPart = Number.isFinite(rightParts[index]) ? rightParts[index] : 0;
+		if (leftPart > rightPart) return 1;
+		if (leftPart < rightPart) return -1;
+	}
+	return 0;
+}
+
+function managedInstallLocation() {
+	const packageDir = dirname(dirname(fileURLToPath(import.meta.url)));
+	if (basename(packageDir) !== id) return;
+	const nodeModulesDir = dirname(packageDir);
+	if (basename(nodeModulesDir) !== "node_modules") return;
+	return {
+		packageDir,
+		configDir: dirname(nodeModulesDir),
+	};
+}
+
+async function readSelfUpdateCache(configDir: string): Promise<SelfUpdateCache> {
+	try {
+		const cache = await Bun.file(join(configDir, updateStateFile)).json();
+		if (!cache || typeof cache !== "object") return {};
+		return cache as SelfUpdateCache;
+	} catch {
+		return {};
+	}
+}
+
+async function writeSelfUpdateCache(configDir: string, cache: SelfUpdateCache) {
+	try {
+		await Bun.write(join(configDir, updateStateFile), `${JSON.stringify(cache)}\n`);
+	} catch {
+		// The updater is best-effort. A read-only config directory should not break
+		// the sidebar itself.
+	}
+}
+
+async function latestPublishedVersion() {
+	const response = await fetch(`https://registry.npmjs.org/${id}`, {
+		headers: { accept: "application/json" },
+	});
+	if (!response.ok) throw new Error(`npm registry returned ${response.status}`);
+	const metadata = (await response.json()) as {
+		"dist-tags"?: { latest?: unknown };
+	};
+	const latest = metadata["dist-tags"]?.latest;
+	if (typeof latest !== "string") throw new Error("npm registry response has no latest version");
+	return latest;
+}
+
+function updateCommand() {
+	return ["bun", "add", `${id}@latest`];
+}
+
+async function installLatestVersion(configDir: string) {
+	const command = updateCommand();
+	const process = Bun.spawn(command, {
+		cwd: configDir,
+		stdout: "ignore",
+		stderr: "pipe",
+	});
+	const [exitCode, stderr] = await Promise.all([
+		process.exited,
+		new Response(process.stderr).text(),
+	]);
+	if (exitCode !== 0) {
+		throw new Error(stderr.trim() || `${command.join(" ")} exited with ${exitCode}`);
+	}
+}
+
+function selfUpdateDisabled() {
+	const value = process.env.OPENCODE_SIDEBAR_BACKGROUND_SESSIONS_AUTO_UPDATE;
+	return value === "0" || value === "false" || value === "no";
+}
+
+async function runSelfUpdate() {
+	const location = managedInstallLocation();
+	if (!location) {
+		emitSelfUpdateState({ status: "skipped", message: "not an npm install" });
+		return;
+	}
+
+	const cache = await readSelfUpdateCache(location.configDir);
+	const now = Date.now();
+	if (
+		cache.lastCheck &&
+		cache.checkedVersion === version &&
+		now - cache.lastCheck < updateCheckIntervalMs
+	) {
+		emitSelfUpdateState({ status: "current" });
+		return;
+	}
+
+	emitSelfUpdateState({ status: "checking" });
+	let latestVersion: string;
+	try {
+		latestVersion = await latestPublishedVersion();
+		await writeSelfUpdateCache(location.configDir, {
+			lastCheck: now,
+			checkedVersion: version,
+		});
+	} catch {
+		// Do not render noisy network errors in the sidebar. A future startup will
+		// try again.
+		emitSelfUpdateState({ status: "idle" });
+		return;
+	}
+
+	if (compareVersions(latestVersion, version) <= 0) {
+		emitSelfUpdateState({ status: "current" });
+		return;
+	}
+
+	emitSelfUpdateState({
+		status: "updating",
+		currentVersion: version,
+		latestVersion,
+	});
+	try {
+		await installLatestVersion(location.configDir);
+		emitSelfUpdateState({
+			status: "updated",
+			currentVersion: version,
+			latestVersion,
+		});
+	} catch (error) {
+		emitSelfUpdateState({
+			status: "error",
+			currentVersion: version,
+			latestVersion,
+			message: error instanceof Error ? error.message : "update failed",
+		});
+	}
+}
+
+function startSelfUpdate() {
+	if (selfUpdateStarted) return;
+	selfUpdateStarted = true;
+	if (selfUpdateDisabled()) {
+		emitSelfUpdateState({ status: "skipped", message: "disabled" });
+		return;
+	}
+	setTimeout(() => {
+		void runSelfUpdate();
+	}, 1000);
+}
+
+function selfUpdateNotice() {
+	if (selfUpdateState.status === "updating") {
+		return {
+			marker: "↻",
+			message: `updating plugin ${selfUpdateState.currentVersion} → ${selfUpdateState.latestVersion}`,
+			tone: "warning" as const,
+		};
+	}
+	if (selfUpdateState.status === "updated") {
+		return {
+			marker: "✓",
+			message: `plugin updated to ${selfUpdateState.latestVersion}; restart OpenCode`,
+			tone: "success" as const,
+		};
+	}
+	if (selfUpdateState.status === "error") {
+		return {
+			marker: "!",
+			message: `plugin update failed: ${selfUpdateState.message ?? "unknown error"}`,
+			tone: "error" as const,
+		};
+	}
+}
 
 type TaskItem = {
 	sessionID?: string;
@@ -327,6 +539,40 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 		const items = list();
 		const ctx = container.ctx;
 		const currentTheme = theme();
+		const updateNotice = selfUpdateNotice();
+
+		if (updateNotice) {
+			const color =
+				updateNotice.tone === "success"
+					? currentTheme.success
+					: updateNotice.tone === "error"
+						? currentTheme.error
+						: currentTheme.warning;
+			const row = new BoxRenderable(ctx, {
+				flexDirection: "row",
+				gap: 1,
+			});
+			row.add(
+				new TextRenderable(ctx, {
+					content: updateNotice.marker,
+					fg: color,
+				}),
+			);
+			row.add(
+				new TextRenderable(ctx, {
+					content: updateNotice.message,
+					fg: color,
+					wrapMode: "word",
+				}),
+			);
+			container.add(row);
+			container.add(
+				new TextRenderable(ctx, {
+					content: " ",
+					fg: currentTheme.textMuted,
+				}),
+			);
+		}
 
 		if (items.length > 0) {
 			const header = new BoxRenderable(ctx, {
@@ -591,6 +837,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	onCleanup(props.api.event.on("session.updated", refreshSessions));
 	onCleanup(props.api.event.on("session.status", refreshSidebar));
 	onCleanup(props.api.event.on("session.idle", refreshIdleSession));
+	onCleanup(onSelfUpdateStateChange(scheduleRenderSidebar));
 
 	return (
 		<box
@@ -604,6 +851,8 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 }
 
 const tui: TuiPlugin = async (api) => {
+	startSelfUpdate();
+
 	api.slots.register({
 		order: 50,
 		slots: {

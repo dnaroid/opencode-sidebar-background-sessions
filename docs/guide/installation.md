@@ -63,6 +63,22 @@ This package is a TUI plugin, not a server plugin.
 
 7. Start any background task agent. The sidebar should show `Running Agents` above the normal sidebar content.
 
+## Automatic updates
+
+When installed from npm under `~/.config/opencode/node_modules`, the plugin checks the npm registry on OpenCode startup. If a newer version exists, it runs this command in the OpenCode config directory:
+
+```bash
+bun add opencode-sidebar-background-sessions@latest
+```
+
+The currently running TUI keeps the old plugin bundle loaded. After the update finishes, restart OpenCode when the sidebar shows the update notice.
+
+Disable automatic updates by setting:
+
+```bash
+OPENCODE_SIDEBAR_BACKGROUND_SESSIONS_AUTO_UPDATE=0
+```
+
 ## Troubleshooting missing `dist/`
 
 If OpenCode reports that `dist/index.js` is missing, the installed package is incomplete or stale. Reinstall the latest npm package first:
