@@ -443,7 +443,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	const clearContainer = () => {
 		if (!container) return;
 		for (const child of [...container.getChildren()]) {
-			container.remove(child.id);
+			// Destruction also detaches the child across OpenTUI remove() API versions.
 			child.destroyRecursively();
 		}
 	};
