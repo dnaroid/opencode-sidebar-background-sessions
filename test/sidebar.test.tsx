@@ -623,3 +623,44 @@ test("idle session events immediately remove completed running agents while sess
 	frame = await sidebar.frame();
 	expect(frame).toContain("▶ Sessions");
 });
+
+test("message redraws keep agent updates and accordion clicks working", async () => {
+	const task = taskPart("child", "running");
+	const sidebar = await renderSidebar({
+		initialSessionID: "parent",
+		sessions: [session("parent", "Parent"), session("other", "Other")],
+		messagesBySession: new Map([["parent", [{ id: "m1" }]]]),
+		partsByMessage: new Map([["m1", [task]]]),
+	});
+
+	let frame = await sidebar.frame();
+	expect(frame).toContain("Task for child");
+
+	for (const event of ["message.updated", "message.part.updated"]) {
+		task.state.input.description = `Updated by ${event}`;
+		expect(() => sidebar.emit(event)).not.toThrow();
+		frame = await sidebar.frame();
+		expect(frame).toContain(`Updated by ${event}`);
+		expect(frame.match(/Running Agents/g)).toHaveLength(1);
+	}
+
+	const sessionsY = frame
+		.split("\n")
+		.findIndex((line) => line.includes("▶ Sessions"));
+	await sidebar.mockMouse.click(2, sessionsY);
+	frame = await sidebar.frame();
+	expect(frame).toContain("▼ Sessions");
+	expect(frame).toContain("Other");
+
+	task.state.status = "completed";
+	expect(() => sidebar.emit("message.part.updated")).not.toThrow();
+	frame = await sidebar.frame();
+	expect(frame).not.toContain("Running Agents");
+	expect(frame).toContain("▼ Sessions");
+	expect(frame).toContain("Other");
+
+	await sidebar.mockMouse.click(2, 0);
+	frame = await sidebar.frame();
+	expect(frame).toContain("▶ Sessions");
+	expect(frame).not.toContain("Other");
+});
