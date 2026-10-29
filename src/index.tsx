@@ -5,6 +5,7 @@ import { BoxRenderable, TextAttributes, TextRenderable } from "@opentui/core";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { onCleanup } from "solid-js";
+import { setupV2 } from "./tui-v2.js";
 
 const id = "opencode-sidebar-background-sessions";
 const version = __PLUGIN_VERSION__;
@@ -443,7 +444,12 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 	const clearContainer = () => {
 		if (!container) return;
 		for (const child of [...container.getChildren()]) {
-			container.remove(child.id);
+			// OpenTUI 0.2 removes by ID; newer versions remove by node.
+			try {
+				(container.remove as unknown as (id: string) => void)(child.id);
+			} catch {
+				container.remove(child);
+			}
 			child.destroyRecursively();
 		}
 	};
@@ -866,4 +872,5 @@ const tui: TuiPlugin = async (api) => {
 export default {
 	id,
 	tui,
+	setup: setupV2,
 };
