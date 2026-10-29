@@ -1,129 +1,82 @@
 # Installation Guide
 
-Install `opencode-sidebar-background-sessions` as an OpenCode TUI plugin.
+Install `opencode-sidebar-background-sessions` as an OpenCode TUI plugin. Preserve unrelated settings and existing plugins when editing configuration.
 
-## Goal
-
-Configure OpenCode so the TUI sidebar shows a `Running Agents` section while background task agents are active.
-
-## Important
-
-This package is a TUI plugin, not a server plugin.
-
-- Use your TUI config file:
-  - **macOS / Linux**: `~/.config/opencode/tui.json`
-  - **Windows**: `%APPDATA%\opencode\tui.json`
-- Do not add this package to `~/.config/opencode/opencode.json`.
-- Do not use `opencode plugin -g opencode-sidebar-background-sessions` if that command writes to `opencode.json` in the installed OpenCode version.
-
-## Steps
-
-1. Verify OpenCode is installed:
-
-   ```bash
-   opencode --version
-   ```
-
-2. Open or create your TUI config file:
-   - **macOS / Linux**: `~/.config/opencode/tui.json`
-   - **Windows**: `%APPDATA%\opencode\tui.json`
-
-3. Install the package into your OpenCode config directory:
-
-   ```bash
-   cd ~/.config/opencode
-   bun add opencode-sidebar-background-sessions
-   ```
-
-   The npm package includes the pre-built `dist/` files. End users should not need to clone this repository or run `bun run build` when installing from npm.
-
-   If Bun reports peer dependency warnings for `@opencode-ai/plugin` or `@opencode-ai/sdk`, install versions that match your OpenCode binary:
-
-   ```bash
-   opencode --version
-   bun add @opencode-ai/plugin@<opencode-version> @opencode-ai/sdk@<opencode-version>
-   ```
-
-4. Ensure `tui.json` has the TUI schema and a `plugin` array pointing at the installed package directory.
-
-   Minimal config:
-
-   ```jsonc
-   {
-     "$schema": "https://opencode.ai/tui.json",
-     "plugin": ["./node_modules/opencode-sidebar-background-sessions"],
-   }
-   ```
-
-   If `plugin` already exists, append the package path without removing existing plugins.
-
-5. Ensure `~/.config/opencode/opencode.json` does **not** list `opencode-sidebar-background-sessions` in its `plugin` array. This package is TUI-only and should load from `tui.json`, not the server plugin config.
-
-6. Restart OpenCode.
-
-7. Start any background task agent. The sidebar should show `Running Agents` above the normal sidebar content.
-
-## Automatic updates
-
-When installed from npm under `~/.config/opencode/node_modules`, the plugin checks the npm registry on OpenCode startup. If a newer version exists, it runs this command in the OpenCode config directory:
+Check your OpenCode version first:
 
 ```bash
-bun add opencode-sidebar-background-sessions@latest
+opencode --version
 ```
 
-The currently running TUI keeps the old plugin bundle loaded. After the update finishes, restart OpenCode when the sidebar shows the update notice.
+## OpenCode V2
 
-Disable automatic updates by setting:
+V2 support requires a release containing this port. The published npm package `0.5.0` supports V1 only. Until a V2-compatible release is published, use the local checkout below.
 
-```bash
-OPENCODE_SIDEBAR_BACKGROUND_SESSIONS_AUTO_UPDATE=0
+For a V2-compatible release, add the package to the global TUI configuration at `~/.config/opencode/cli.json` (or `$XDG_CONFIG_HOME/opencode/cli.json`):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": ["opencode-sidebar-background-sessions"]
+}
 ```
 
-## Troubleshooting missing `dist/`
+This is a TUI-only plugin. Do not add it to the server's `opencode.json`. Valid changes to `cli.json` reload automatically.
 
-If OpenCode reports that `dist/index.js` is missing, the installed package is incomplete or stale. Reinstall the latest npm package first:
+## OpenCode V1
+
+Install the package into the OpenCode config directory:
 
 ```bash
 cd ~/.config/opencode
-bun remove opencode-sidebar-background-sessions
-bun add opencode-sidebar-background-sessions@latest
-test -f node_modules/opencode-sidebar-background-sessions/dist/index.js
+bun add opencode-sidebar-background-sessions
 ```
 
-Only build from source as a temporary workaround for a broken local checkout or a broken npm publish:
-
-```bash
-git clone https://github.com/dnaroid/opencode-sidebar-background-sessions.git /tmp/opencode-sidebar-bg-build
-cd /tmp/opencode-sidebar-bg-build
-bun install
-bun run build
-cp -R dist ~/.config/opencode/node_modules/opencode-sidebar-background-sessions/
-rm -rf /tmp/opencode-sidebar-bg-build
-```
-
-## Local development install
-
-When installing from a local checkout instead of npm:
-
-```bash
-bun install
-bun run build
-```
-
-Then add the package root to your TUI config (opencode resolves the `./tui` export from `package.json`):
+Add the installed package to `~/.config/opencode/tui.json` on macOS/Linux or `%APPDATA%\opencode\tui.json` on Windows:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["/absolute/path/to/opencode-sidebar-background-sessions"],
+  "plugin": ["./node_modules/opencode-sidebar-background-sessions"]
 }
 ```
 
+Restart the V1 TUI after installing. Do not use `opencode plugin -g` if it writes to the server plugin configuration instead of `tui.json`.
+
+## Local development install
+
+Clone the repository, then build it:
+
+```bash
+git clone https://github.com/dnaroid/opencode-sidebar-background-sessions.git
+cd opencode-sidebar-background-sessions
+bun install
+bun run build
+```
+
+Add the absolute checkout directory to the appropriate config. For V2:
+
+```jsonc
+// ~/.config/opencode/cli.json
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": ["/absolute/path/to/opencode-sidebar-background-sessions"]
+}
+```
+
+For V1, use `tui.json` and the `plugin` array instead. Rebuild after changing the source. Use `/reload` in V2 if needed to load the rebuilt bundle.
+
+## Updates
+
+The V1 plugin checks npm for updates only when installed under the OpenCode config directory's `node_modules`. Set `OPENCODE_SIDEBAR_BACKGROUND_SESSIONS_AUTO_UPDATE=0` to disable this behavior. Restart V1 after an update.
+
+V2 does not run this self-updater. Update the package through OpenCode or rebuild the local checkout.
+
 ## Validation
 
-After editing `tui.json`:
+1. Open an existing session in a sufficiently wide terminal with the sidebar enabled.
+2. Expand `Sessions` and confirm the current project's sessions appear.
+3. Start a subagent and confirm `Running Agents` appears while it runs and disappears when it finishes. V2 shows both foreground and background active child sessions.
+4. Click a session or agent row to navigate to it. Long titles should wrap.
 
-1. Run `opencode`.
-2. Launch a background task/sub-agent.
-3. Confirm `Running Agents` appears in the sidebar.
-4. Confirm long task titles wrap instead of clipping.
+If a local checkout reports a missing `dist/index.js`, run `bun install` and `bun run build` in the checkout, then reload the plugin.

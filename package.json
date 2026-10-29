@@ -41,11 +41,11 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"build": "rm -rf dist && bun ./scripts/build.ts && tsc --emitDeclarationOnly",
+		"build": "bun ./scripts/build.ts && tsc --emitDeclarationOnly",
 		"plugin:install": "mkdir -p ~/.config/opencode && bun add --cwd ~/.config/opencode opencode-sidebar-background-sessions",
 		"publish:npm": "bun run build && bun publish --access public",
-		"test": "bun run build && bun test test",
-		"test:coverage": "bun run build && bun test --coverage test",
+		"test": "bun run build && bun test --conditions=browser test",
+		"test:coverage": "bun run build && bun test --conditions=browser --coverage test",
 		"typecheck": "tsc --noEmit",
 		"prepack": "bun run build",
 		"prepublishOnly": "bun run build"
@@ -53,13 +53,25 @@
 	"peerDependencies": {
 		"@opencode-ai/plugin": ">=1.14.0",
 		"@opencode-ai/sdk": ">=1.14.0",
+		"@opencode/client": ">=2.2.0",
+		"@opencode/plugin": ">=2.2.0",
+		"@opentui/core": ">=0.2.6",
 		"@opentui/solid": ">=0.2.6",
 		"solid-js": ">=1.9.0"
+	},
+	"peerDependenciesMeta": {
+		"@opencode-ai/plugin": { "optional": true },
+		"@opencode-ai/sdk": { "optional": true },
+		"@opencode/client": { "optional": true },
+		"@opencode/plugin": { "optional": true }
 	},
 	"devDependencies": {
 		"@opencode-ai/plugin": "^1.14.48",
 		"@opencode-ai/sdk": "^1.14.48",
-		"@opentui/solid": "^0.2.6",
+		"@opencode/client": "2.2.0",
+		"@opencode/plugin": "2.2.0",
+		"@opentui/core": "0.7.0",
+		"@opentui/solid": "0.7.0",
 		"@types/bun": "^1.3.5",
 		"@types/node": "^22.15.0",
 		"solid-js": "^1.9.12",

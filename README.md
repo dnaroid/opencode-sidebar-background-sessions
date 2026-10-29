@@ -4,18 +4,19 @@ OpenCode TUI sidebar plugin for background agents and quick session navigation.
 
 It adds two sidebar sections:
 
-- `Running Agents` — shows currently active background sub-agent sessions and lets you jump into them.
+- `Running Agents` — shows active child-agent sessions and lets you jump into them.
 - `Sessions` — a collapsible project-session accordion with paginated navigation between recent sessions.
 
 ![OpenCode sidebar demo](sidebar-demo.png)
 
 ## Features
 
-- Tracks active background agents.
+- Tracks active child-agent sessions. On V2 this includes foreground and background subagents.
 - Adds a project-only `Sessions` accordion.
 - Supports click-to-open agent and session rows.
 - Includes compact header pagination, for example `← 01/11 →`.
 - Hides stale completed-agent records and sub-agent sessions from the navigator.
+- On V2, shows session activity and attention indicators, including active child agents.
 
 ## Sidebar behavior
 
@@ -31,11 +32,41 @@ When expanded, it renders session rows and pagination controls in the accordion 
 
 ```text
 ▼ Sessions                                           ← 01/11 →
-• Current project session
-• Another project session
+○ Idle project session
+● Working project session
+◆ Session with an unread result
+? Session waiting for an answer
 ```
 
-The arrows are always visible when sessions are loaded. Active arrows are bright; inactive arrows are muted. Clicking pagination controls changes the visible page without collapsing the accordion.
+The arrows are always visible when sessions are loaded. Active arrows are bright; inactive arrows are muted. Clicking pagination controls changes the visible page without collapsing the accordion. In V2, the accordion stays open or closed when navigating between sessions.
+
+### V2 activity indicators
+
+| Indicator | Meaning |
+| --- | --- |
+| `○` muted | Idle |
+| `●` blinking success color | Working |
+| `!` warning color | Permission approval needed |
+| `?` warning color | Answer needed |
+| `◆` accent color | Unread completed or interrupted execution |
+| `×` error color | Unread failed execution |
+| `·` muted | Attention status loading or unavailable |
+
+Colors follow the active OpenCode theme. A permission or question takes precedence over working, including requests from known child sessions. A root also shows working when a known child is active. Unread status follows OpenCode's server-side viewed timestamp for the root session, so viewing it clears the indicator. OpenCode does not expose a reliable percentage for session execution.
+
+Only visible session rows and active child agents are checked for pending requests. Status updates follow OpenCode's live events. On reconnect the plugin refreshes those checks. Requests belonging to children not yet known to the client cannot be attributed to their parent.
+
+To keep the working indicator steady instead of blinking, configure this plugin with `animate: false` in `cli.json`:
+
+```jsonc
+{
+  "plugins": [
+    { "package": "opencode-sidebar-background-sessions", "options": { "animate": false } }
+  ]
+}
+```
+
+Use the local package path instead of the name when using a development checkout. This option is separate from OpenCode's global animation setting. V1 keeps its existing indicators.
 
 ## Installation
 
@@ -58,11 +89,24 @@ Fetch the installation guide and follow it:
 curl -s https://raw.githubusercontent.com/dnaroid/opencode-sidebar-background-sessions/master/docs/guide/installation.md
 ```
 
-### Manual install
+### OpenCode V2
 
-This is an OpenCode TUI plugin. It belongs in `tui.json`, not `opencode.json`.
+V2 support requires a release containing this port. The published `0.5.0` package supports V1 only. Until a V2-compatible release is published, use the [local development install](#local-development-install).
 
-Install the npm package into your OpenCode config directory and point TUI at the installed package:
+Add the TUI-only package to `~/.config/opencode/cli.json` (or `$XDG_CONFIG_HOME/opencode/cli.json`):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": ["opencode-sidebar-background-sessions"]
+}
+```
+
+Preserve existing entries in `plugins`. OpenCode reloads valid changes to `cli.json` automatically. The sidebar is visible in a session when the terminal is wide enough and the sidebar is enabled.
+
+### OpenCode V1
+
+Install the npm package into your OpenCode config directory:
 
 ```bash
 cd ~/.config/opencode
@@ -79,13 +123,13 @@ bun add opencode-sidebar-background-sessions
 }
 ```
 
-Restart OpenCode after installing. The sidebar will render the `Sessions` accordion even when there are no running background agents.
+Restart OpenCode after installing. The sidebar renders the `Sessions` accordion even when there are no running background agents.
 
 Do not use `opencode plugin -g` for this package if your OpenCode version writes plugin entries to `opencode.json`; that command is for server plugins, while this package is loaded by the TUI plugin runtime.
 
 ### Updates
 
-When installed from npm under `~/.config/opencode/node_modules`, the plugin checks npm on startup and updates itself with:
+On V1, when installed from npm under `~/.config/opencode/node_modules`, the plugin checks npm on startup and updates itself with:
 
 ```bash
 bun add opencode-sidebar-background-sessions@latest
@@ -99,6 +143,8 @@ To disable automatic updates, start OpenCode with:
 OPENCODE_SIDEBAR_BACKGROUND_SESSIONS_AUTO_UPDATE=0 opencode
 ```
 
+V2 does not run the plugin's V1 self-updater. Update a package through OpenCode or rebuild a local checkout instead.
+
 ## Local development install
 
 From this package directory:
@@ -108,15 +154,24 @@ bun install
 bun run build
 ```
 
-Then point OpenCode at the package root — it will resolve the `./tui` export from `package.json` automatically:
+Then add the package root to your existing TUI configuration. OpenCode resolves the `./tui` export from `package.json`:
 
 ```jsonc
-// ~/.config/opencode/tui.json  (macOS/Linux)
-// %APPDATA%\opencode\tui.json  (Windows)
+// V2: ~/.config/opencode/cli.json
+{
+  "plugins": ["/absolute/path/to/opencode-sidebar-background-sessions"]
+}
+```
+
+```jsonc
+// V1: ~/.config/opencode/tui.json (macOS/Linux)
+// V1: %APPDATA%\opencode\tui.json (Windows)
 {
   "plugin": ["/absolute/path/to/opencode-sidebar-background-sessions"],
 }
 ```
+
+Rebuild after changing the source. Use `/reload` in V2 if needed to load the rebuilt bundle. Keep other config entries unchanged.
 
 ## Development
 
@@ -128,11 +183,10 @@ bun run test:coverage
 bun run build
 ```
 
-The test suite builds the plugin first and then drives the compiled TUI plugin through OpenTUI's `testRender` harness. It covers the regressions that shaped the current behavior: accordion collapse, header pagination, project-scoped session loading, sub-agent filtering, stale page refreshes, false `Running Agents` rows from old completed task records, running-agent navigation, and agent/model metadata formatting.
+The test suite builds the plugin first and drives both TUI implementations through OpenTUI's `testRender` harness. It covers accordion interaction, project-scoped loading, pagination, navigation, activity and attention states, stale requests and cleanup. Run the V1 tests against OpenTUI 0.2 as well when changing shared runtime code.
 
 ## Notes
 
-- This is a TUI plugin, so it is configured in `tui.json`, not `opencode.json`.
-- The normal OpenCode Status dialog lists server plugins; TUI plugins may not appear there.
+- This is a TUI plugin. Configure it in `cli.json` for V2 or `tui.json` for V1, not `opencode.json`.
+- On V2, `Running Agents` reflects the live status of direct child sessions, not historical tool output.
 - The plugin intentionally does not mutate session titles. It reads the current TUI session state and renders only in the sidebar.
-- If you update an installed copy under `~/.config/opencode/node_modules`, restart the OpenCode TUI so the plugin bundle is reloaded.
